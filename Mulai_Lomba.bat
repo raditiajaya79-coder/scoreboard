@@ -17,9 +17,9 @@ timeout /t 5 /nobreak > nul
 
 echo.
 echo [3/3] Membuka Browser Otomatis...
-start http://localhost:5173/display
+start http://localhost:3000/display
 timeout /t 1 /nobreak > nul
-start http://localhost:5173/operator
+start http://localhost:3000/operator
 
 echo.
 echo ====================================================
