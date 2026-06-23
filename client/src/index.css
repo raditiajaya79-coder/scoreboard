@@ -1,0 +1,677 @@
+/* 
+  ECCS Premium Stylesheet - Professional Edition
+  Desain profesional modern berbasis HSL, Glassmorphism, dan Typography Outfit.
+  Menghilangkan unsur kekanak-kanakan (alay), beralih ke layout korporat/lomba elit TV.
+  Mematuhi aturan anti-zoom scale Windows (1rem = 10px) dan fluid typography.
+*/
+
+:root {
+  /* Palet Warna Primer & UI (Slightly Brighter Slate-Blue Theme) */
+  --bg-primary: #0f172a;       /* Slate 900 - Latar utama solid profesional */
+  --bg-secondary: #1e293b;     /* Slate 800 - Latar panel/card */
+  --bg-glass: rgba(30, 41, 59, 0.75); /* Kaca transparan modern */
+  --text-primary: #f8fafc;     /* Slate 50 - Teks utama bersih */
+  --text-secondary: #94a3b8;   /* Slate 400 - Teks sekunder */
+  
+  /* Aksentuasi & Gradien Terkurasi (Indigo-Cyan Premium) */
+  --gradient-accent: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%); /* Indigo ke Cyan */
+  --gradient-success: linear-gradient(135deg, #10b981 0%, #0d9488 100%); /* Emerald ke Teal */
+  --gradient-danger: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);  /* Rose ke Red */
+  --gradient-warning: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); /* Amber ke Yellow-dark */
+  
+  /* Border & Bayangan */
+  --border-glass: 0.1rem solid rgba(255, 255, 255, 0.08);
+  --border-focus: 0.1rem solid #6366f1;
+  --shadow-premium: 0 1rem 3rem -0.5rem rgba(0, 0, 0, 0.3);
+  --shadow-glow: 0 0 2.5rem rgba(99, 102, 241, 0.15);
+  
+  /* Layout */
+  --container-max-width: 165rem; /* 1650px - Diperlebar agar memanfaatkan layar laptop penuh */
+  --font-outfit: 'Outfit', sans-serif;
+  --font-inter: 'Inter', sans-serif;
+}
+
+/* Tema opsional: Merah Putih (Premium Independence Edition) */
+[data-theme="merah-putih"] {
+  --bg-primary: #1e1111;
+  --bg-secondary: #2e1a1a;
+  --bg-glass: rgba(46, 26, 26, 0.8);
+  --text-primary: #fff5f5;
+  --text-secondary: #fca5a5;
+  --gradient-accent: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  --shadow-glow: 0 0 2.5rem rgba(239, 68, 68, 0.15);
+}
+
+/* Tema opsional: Corporate Modern (Formal & Minimalist) */
+[data-theme="corporate"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-glass: rgba(255, 255, 255, 0.9);
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --gradient-accent: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  --border-glass: 0.1rem solid rgba(15, 23, 42, 0.08);
+  --shadow-premium: 0 0.8rem 2.4rem rgba(15, 23, 42, 0.05);
+  --shadow-glow: 0 0 2rem rgba(37, 99, 235, 0.1);
+}
+
+/* Base Setup (62.5% html base font-size untuk rem scaling) */
+html {
+  font-size: 62.5%;
+  box-sizing: border-box;
+  scroll-behavior: smooth;
+}
+
+*, *:before, *:after {
+  box-sizing: inherit;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-inter);
+  font-size: clamp(1.4rem, 1.5vw, 1.6rem); /* Fluid Typography */
+  line-height: 1.5;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* Typography */
+h1 {
+  font-family: var(--font-outfit);
+  font-weight: 800;
+  font-size: clamp(2.4rem, 4vw, 3.8rem);
+  letter-spacing: -0.03em;
+  background: var(--gradient-accent);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 1.5rem;
+}
+
+h2 {
+  font-family: var(--font-outfit);
+  font-weight: 700;
+  font-size: clamp(1.8rem, 2.5vw, 2.6rem);
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  margin-bottom: 2rem;
+}
+
+h3 {
+  font-family: var(--font-outfit);
+  font-weight: 600;
+  font-size: clamp(1.5rem, 1.8vw, 2rem);
+  color: var(--text-primary);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+/* ==========================================
+   LAYOUT STRUCTURES (FLEXBOX & GRID)
+   ========================================== */
+
+.app-container {
+  max-width: var(--container-max-width);
+  margin: 0 auto;
+  padding: 3rem 4rem; /* Padding horizontal ditingkatkan agar layout tetap rapi */
+  width: 100%;
+}
+
+.grid-auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(30rem, 1fr));
+  gap: 2.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.operator-layout {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 3rem;
+  width: 100%;
+}
+
+.operator-main {
+  flex: 1 1 45rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.operator-main > *:last-child {
+  margin-bottom: 0 !important;
+}
+
+.operator-sidebar {
+  flex: 1 1 45rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.operator-sidebar > *:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* ==========================================
+   CARDS & CONTAINERS (GLASSMORPHISM)
+   ========================================== */
+
+.glass-card {
+  background: var(--bg-glass);
+  backdrop-filter: blur(1.5rem);
+  -webkit-backdrop-filter: blur(1.5rem);
+  border: var(--border-glass);
+  border-radius: 1.6rem;
+  padding: 3rem;
+  box-shadow: var(--shadow-premium);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.glass-card:hover {
+  transform: translateY(-0.2rem);
+  box-shadow: var(--shadow-premium), var(--shadow-glow);
+}
+
+.list-item {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 1.2rem;
+  border: 0.1rem solid rgba(255, 255, 255, 0.05);
+  padding: 1.5rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  transition: all 0.2s;
+}
+
+.list-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ==========================================
+   BUTTONS & CONTROLS (Vibrant & Premium)
+   ========================================== */
+
+.btn {
+  font-family: var(--font-outfit);
+  font-weight: 600;
+  font-size: 1.4rem;
+  padding: 1.2rem 2rem;
+  border-radius: 1rem;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #ffffff;
+}
+
+/* Tombol Aksen Gradient */
+.btn-primary {
+  background: var(--gradient-accent);
+  box-shadow: 0 0.4rem 1.6rem rgba(99, 102, 241, 0.35);
+}
+
+.btn-primary:hover {
+  transform: translateY(-0.2rem);
+  box-shadow: 0 0.6rem 2.4rem rgba(99, 102, 241, 0.5);
+}
+
+.btn-success {
+  background: var(--gradient-success);
+  box-shadow: 0 0.4rem 1.6rem rgba(16, 185, 129, 0.3);
+}
+
+.btn-success:hover {
+  transform: translateY(-0.2rem);
+  box-shadow: 0 0.6rem 2.4rem rgba(16, 185, 129, 0.45);
+}
+
+.btn-danger {
+  background: var(--gradient-danger);
+  box-shadow: 0 0.4rem 1.6rem rgba(244, 63, 94, 0.3);
+}
+
+.btn-danger:hover {
+  transform: translateY(-0.2rem);
+  box-shadow: 0 0.6rem 2.4rem rgba(244, 63, 94, 0.45);
+}
+
+.btn-warning {
+  background: var(--gradient-warning);
+  box-shadow: 0 0.4rem 1.6rem rgba(245, 158, 11, 0.3);
+}
+
+.btn-warning:hover {
+  transform: translateY(-0.2rem);
+  box-shadow: 0 0.6rem 2.4rem rgba(245, 158, 11, 0.45);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border: 0.1rem solid rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-0.1rem);
+}
+
+/* Form Controls */
+.form-group {
+  margin-bottom: 2.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.form-label {
+  font-size: 1.3rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.form-control {
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.1rem solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.8rem;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+  padding: 1.2rem 1.6rem;
+  transition: all 0.2s;
+  width: 100%;
+  font-family: inherit;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #6366f1;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 1.5rem rgba(99, 102, 241, 0.15);
+}
+
+/* ==========================================
+   DISPLAY SCREEN SPECIFIC (Papan Skor Proyektor)
+   ========================================== */
+
+.display-layout {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 100vh;
+  padding: 5rem 6rem;
+  width: 100%;
+  overflow: hidden;
+}
+
+.display-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 0.1rem solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 2.5rem;
+  margin-bottom: 3.5rem;
+}
+
+.display-teams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(32rem, 1fr));
+  gap: 3.5rem;
+  flex-grow: 1;
+  align-items: center;
+}
+
+.display-team-card {
+  align-items: center;
+  border-radius: 2.4rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 5rem 3rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.display-team-score {
+  font-family: var(--font-outfit);
+  font-size: clamp(6.5rem, 12vw, 11rem);
+  font-weight: 800;
+  line-height: 1;
+  margin: 2rem 0;
+  text-shadow: 0 0.8rem 2.4rem rgba(0, 0, 0, 0.5);
+  transition: opacity 0.5s ease;
+  letter-spacing: -0.03em;
+}
+
+.display-team-name {
+  font-family: var(--font-outfit);
+  font-size: clamp(2.4rem, 4vw, 3.8rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.display-timer-box {
+  background: rgba(15, 23, 42, 0.5);
+  border: 0.1rem solid rgba(255, 255, 255, 0.1);
+  border-radius: 2rem;
+  padding: 1.5rem 3.5rem;
+  text-align: center;
+  font-family: var(--font-outfit);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.display-timer-value {
+  font-size: clamp(7.5rem, 13vw, 13rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 0.85;
+  letter-spacing: -0.05em;
+}
+
+/* ==========================================
+   NAVBAR & HEADER
+   ========================================== */
+
+.navbar {
+  background: var(--bg-secondary);
+  border-bottom: 0.1rem solid rgba(255, 255, 255, 0.08);
+  padding: 1.5rem 2.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 0.4rem 1.2rem rgba(0, 0, 0, 0.1);
+}
+
+.nav-container {
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.nav-brand {
+  font-family: var(--font-outfit);
+  font-weight: 800;
+  font-size: 1.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  background: var(--gradient-accent);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.nav-links {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.nav-link {
+  font-size: 1.4rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  opacity: 0.6;
+  padding-bottom: 0.4rem;
+  border-bottom: 0.2rem solid transparent;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.nav-link:hover {
+  opacity: 1;
+  color: #6366f1;
+}
+
+.nav-link.active {
+  opacity: 1;
+  border-bottom: 0.2rem solid #6366f1;
+}
+
+.nav-link-operator {
+  color: #06b6d4;
+  font-weight: 600;
+}
+.nav-link-operator.active {
+  border-bottom-color: #06b6d4;
+}
+
+.nav-link-display {
+  color: #f43f5e;
+  font-weight: 600;
+  opacity: 0.9;
+}
+.nav-link-display:hover {
+  opacity: 1;
+  color: #e11d48;
+}
+
+.nav-profile {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.nav-profile-text {
+  font-size: 1.3rem;
+  color: var(--text-secondary);
+}
+
+.nav-profile-name {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* ==========================================
+   BREAKPOINTS RESPONSIVE (MEDIA QUERIES)
+   ========================================== */
+
+/* 1. Mobile (max-width: 480px) */
+@media (max-width: 480px) {
+  html {
+    font-size: 55%;
+  }
+  .app-container {
+    padding: 1.5rem;
+  }
+  .operator-layout {
+    flex-direction: column;
+  }
+  .btn {
+    width: 100%;
+  }
+  .display-layout {
+    padding: 2rem 1.5rem;
+  }
+  .display-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 2rem;
+  }
+  .display-timer-box {
+    width: 100%;
+    margin-top: 1.5rem;
+  }
+  .navbar {
+    padding: 1.2rem;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .nav-container {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.5rem;
+  }
+  .nav-links {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+    flex-wrap: nowrap;
+  }
+  .nav-profile {
+    width: 100%;
+    justify-content: space-between;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 0.1rem solid rgba(255,255,255,0.05);
+  }
+}
+
+/* 2. Tablet (481px - 768px) */
+@media (min-width: 481px) and (max-width: 768px) {
+  html {
+    font-size: 60%;
+  }
+  .app-container {
+    padding: 2.5rem;
+  }
+  .operator-layout {
+    flex-direction: column;
+  }
+  .display-teams-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .navbar {
+    padding: 1.5rem;
+    justify-content: center;
+  }
+  .nav-container {
+    justify-content: center;
+  }
+  .nav-profile {
+    width: 100%;
+    justify-content: center;
+    margin-top: 1.5rem;
+  }
+}
+
+/* 3. Laptop (769px - 1024px) */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .display-teams-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 4. Desktop (1025px - 1440px) */
+@media (min-width: 1025px) and (max-width: 1440px) {
+  /* Layout default optimal */
+}
+
+/* 5. Wide Screen (1441px ke atas) */
+@media (min-width: 1441px) {
+  .app-container {
+    max-width: 180rem; /* 1800px - Lebar ekstra untuk monitor resolusi tinggi */
+    padding: 3rem 6rem; /* Padding lebih lebar untuk keseimbangan visual */
+  }
+}
+
+/* ==========================================
+   MODAL / NOTIFICATION OVERLAY
+   ========================================== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(0.5rem);
+  -webkit-backdrop-filter: blur(0.5rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 2rem;
+}
+
+.modal-content {
+  width: 100%;
+  max-width: 50rem;
+  background: var(--bg-secondary);
+  border: 0.1rem solid rgba(244, 63, 94, 0.3);
+  box-shadow: 0 2rem 4rem rgba(0, 0, 0, 0.5), 0 0 3rem rgba(244, 63, 94, 0.15);
+  animation: modal-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes modal-pop {
+  0% { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding-bottom: 2rem;
+  border-bottom: 0.1rem solid rgba(255, 255, 255, 0.05);
+  margin-bottom: 2rem;
+}
+
+.modal-icon {
+  color: #f43f5e;
+  background: rgba(244, 63, 94, 0.1);
+  padding: 1.2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-title {
+  font-family: var(--font-outfit);
+  font-weight: 700;
+  font-size: 2.2rem;
+  color: #f8fafc;
+  margin: 0;
+}
+
+.modal-body {
+  font-size: 1.5rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 3rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1.5rem;
+}
+
+@keyframes slideDownFade {
+  from {
+    opacity: 0;
+    transform: translateY(-1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
