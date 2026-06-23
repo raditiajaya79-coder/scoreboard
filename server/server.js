@@ -48,6 +48,7 @@ let gameState = {
   tebakKataPlayer: 1,    // Index pemain aktif dalam Tebak Kata (1 s/d N)
   tebakKataMaxPlayers: 6,// Jumlah maksimal peserta estafet Tebak Kata
   showTimerFullScreen: false, // Status apakah layar display menampilkan timer secara penuh (fullscreen)
+  showRankingFullScreen: false, // Status layar klasemen juara akhir
   tebakKataActiveTeamId: null, // ID tim yang sedang main di mode tebak kata
   tebakKataDuration: 10 // Durasi detik per pemain
 };
@@ -57,7 +58,8 @@ let timerInterval = null;
 
 // Helper untuk mengambil tim beserta skor per babaknya
 async function getTeamsWithRoundScores() {
-  const teams = await queryAll('SELECT * FROM teams ORDER BY score DESC, name ASC');
+  // Ambil data tim dengan urutan tetap berdasarkan ID (tidak berubah posisinya)
+  const teams = await queryAll('SELECT * FROM teams ORDER BY id ASC');
   const logs = await queryAll('SELECT team_id, round_id, change_value FROM score_logs');
   
   // Inisialisasi properti roundScores

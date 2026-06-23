@@ -173,8 +173,8 @@ export default function Display() {
     return team.score || 0; // Fallback ke total skor jika data per babak belum siap
   };
 
-  // Urutkan: skor DESC (revealed) atau abjad ASC (hidden)
-  const sortedTeams = [...teams].sort((a, b) => gameState.revealScores ? getActiveRoundScore(b) - getActiveRoundScore(a) : a.name.localeCompare(b.name));
+  // Posisi tim dibuat paten (tidak berubah-ubah) berdasarkan urutan pembuatan (ID)
+  const sortedTeams = [...teams].sort((a, b) => a.id - b.id);
 
   const hexToRgba = (hex, alpha) => {
     const r = parseInt(hex.slice(1, 3), 16);
@@ -184,15 +184,12 @@ export default function Display() {
   };
 
   const showTimerFS = !!gameState.showTimerFullScreen;
+  const showRankingFS = !!gameState.showRankingFullScreen;
+  const isMainHidden = showTimerFS || showRankingFS;
 
-  // Format timer dinamis (jika di bawah 60 detik, hilangkan 00:)
+  // Format timer dinamis: Selalu tampilkan dalam format detik murni (misal: 60, 90, dst)
   const formatTimer = (seconds) => {
-    if (seconds < 60) {
-      return seconds.toString();
-    }
-    const m = Math.floor(seconds / 60);
-    const s = (seconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
+    return seconds.toString();
   };
 
   return (
@@ -238,13 +235,23 @@ export default function Display() {
         .timer-danger {
           animation: heartbeatDanger 1s infinite;
         }
+        @keyframes dramaticReveal {
+          0% { transform: scale(0.5) translateY(20rem); opacity: 0; filter: blur(2rem); }
+          60% { transform: scale(1.1) translateY(-2rem); opacity: 1; filter: brightness(2) blur(0); }
+          100% { transform: scale(1) translateY(0); opacity: 1; filter: brightness(1); }
+        }
+        @keyframes crownGlow {
+          0% { filter: drop-shadow(0 0 1rem #fbbf24); transform: translateY(0); }
+          50% { filter: drop-shadow(0 0 4rem #fbbf24) brightness(1.5); transform: translateY(-1rem); }
+          100% { filter: drop-shadow(0 0 1rem #fbbf24); transform: translateY(0); }
+        }
       `}</style>
 
-      {/* Konten Utama Layar Display (Akan disembunyikan jika Timer Layar Penuh Aktif) */}
+      {/* Konten Utama Layar Display (Akan disembunyikan jika Timer / Ranking Layar Penuh Aktif) */}
       <div style={{
         flexGrow: 1, display: 'flex', flexDirection: 'column',
-        opacity: showTimerFS ? 0 : 1, pointerEvents: showTimerFS ? 'none' : 'auto',
-        transform: showTimerFS ? 'scale(0.92)' : 'scale(1)', transition: 'all 0.7s cubic-bezier(0.22, 1, 0.36, 1)'
+        opacity: isMainHidden ? 0 : 1, pointerEvents: isMainHidden ? 'none' : 'auto',
+        transform: isMainHidden ? 'scale(0.92)' : 'scale(1)', transition: 'all 0.7s cubic-bezier(0.22, 1, 0.36, 1)'
       }}>
 
         {/* HEADER: PIL SHAPED BANNER */}
@@ -365,7 +372,7 @@ export default function Display() {
                 marginBottom: '5rem',
                 textShadow: `0 0.5rem 2rem ${activeTKTeam ? hexToRgba(activeTKTeam.color, 0.5) : 'transparent'}`
               }}>
-                {activeTKTeam ? activeTKTeam.name : 'MODE CEPAT TEPAT'}
+                {activeTKTeam ? activeTKTeam.name : 'TIMER TEBAK KATA'}
               </div>
               <div 
                 className={isDanger ? 'timer-danger' : ''}
@@ -381,10 +388,230 @@ export default function Display() {
               >
                 {formatTimer(gameState.timerValue)}
               </div>
+
+              {/* Mini Scoreboard Cards di Bawah Timer */}
+              <div style={{
+                position: 'absolute',
+                bottom: '4rem',
+                left: '0',
+                right: '0',
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '2rem',
+                padding: '0 4rem',
+                width: '100%'
+              }}>
+                {sortedTeams.map((team) => {
+                  const roundScore = getActiveRoundScore(team);
+                  const isActive = activeTKTeam && activeTKTeam.id === team.id;
+                  
+                  return (
+                    <div key={team.id} style={{
+                      flex: 1,
+                      maxWidth: '22rem',
+                      background: isActive 
+                        ? `linear-gradient(145deg, ${hexToRgba(team.color, 0.3)} 0%, ${hexToRgba(team.color, 0.1)} 100%)`
+                        : `linear-gradient(145deg, rgba(34, 43, 69, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)`,
+                      border: `0.2rem solid ${isActive ? team.color : hexToRgba(team.color, 0.3)}`,
+                      borderTop: `0.6rem solid ${team.color}`,
+                      borderRadius: '1.5rem',
+                      padding: '1.5rem 1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      boxShadow: isActive 
+                        ? `0 0 3rem ${hexToRgba(team.color, 0.4)}, inset 0 0 2rem ${hexToRgba(team.color, 0.2)}`
+                        : `0 1rem 2rem rgba(0,0,0,0.5)`,
+                      transform: isActive ? 'translateY(-1rem) scale(1.05)' : 'translateY(0) scale(1)',
+                      transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
+                    }}>
+                      <span style={{ 
+                        fontSize: '1.8rem', fontWeight: 800, color: '#ffffff', 
+                        textTransform: 'uppercase', letterSpacing: '0.05em', 
+                        textAlign: 'center', marginBottom: '1rem',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%'
+                      }}>
+                        {team.name}
+                      </span>
+                      <span style={{ 
+                        fontSize: '4.5rem', fontWeight: 900, color: isActive ? '#ffffff' : team.color, 
+                        textShadow: isActive ? `0 0 2rem ${hexToRgba(team.color, 0.8)}, 0 0 4rem ${team.color}` : 'none', 
+                        lineHeight: 1, fontFamily: 'var(--font-outfit)'
+                      }}>
+                        {gameState.revealScores ? roundScore.toLocaleString() : '---'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </>
           );
         })()}
       </div>
+
+      {/* === LAYAR PENGUMUMAN JUARA (KLASEMEN AKHIR) DENGAN ANIMASI DRAMATIS === */}
+      {showRankingFS && (
+        <>
+        <style>{`
+          @keyframes dramaticRise {
+            0% { transform: translateY(100vh) scale(0.9); opacity: 0; filter: brightness(0); }
+            60% { transform: translateY(-3rem) scale(1.02); opacity: 1; filter: brightness(1.5); }
+            80% { transform: translateY(1rem) scale(0.98); filter: brightness(1.2); opacity: 1; }
+            100% { transform: translateY(0) scale(1); filter: brightness(1); opacity: 1; }
+          }
+          @keyframes fireGlow {
+            0%, 100% { box-shadow: 0 -1rem 4rem rgba(251, 146, 60, 0.4), inset 0 2rem 5rem rgba(251, 146, 60, 0.2); }
+            50% { box-shadow: 0 -3rem 8rem rgba(249, 115, 22, 0.8), inset 0 5rem 8rem rgba(249, 115, 22, 0.5); }
+          }
+          @keyframes crownFloat {
+            0%, 100% { transform: translateY(0) rotate(-5deg) scale(1); filter: drop-shadow(0 0 2rem rgba(251, 191, 36, 0.8)); opacity: 1; }
+            50% { transform: translateY(-2rem) rotate(5deg) scale(1.15); filter: drop-shadow(0 0 5rem rgba(251, 191, 36, 1)); opacity: 1; }
+          }
+        `}</style>
+        <div 
+          key={gameState.rankingAnimationKey || 'ranking'}
+          style={{ 
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
+            background: 'radial-gradient(circle at top, #1e1b4b 0%, #0f172a 60%, #000000 100%)',
+            display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center',
+            overflow: 'hidden'
+          }}>
+          {(() => {
+            // Urutkan tim berdasarkan Skor Total untuk Klasemen Akhir
+            const rankingTeams = [...teams].sort((a, b) => b.score - a.score);
+            
+            // Susun array agar Juara 1 di tengah, 2 di kiri, 3 di kanan, dst.
+            const podiumOrder = [];
+            rankingTeams.forEach((team, index) => {
+              if (index % 2 === 1) {
+                podiumOrder.unshift({ team, rank: index + 1 });
+              } else {
+                podiumOrder.push({ team, rank: index + 1 });
+              }
+            });
+
+            return (
+              <>
+                <h1 style={{ 
+                  position: 'absolute', top: '5rem',
+                  fontSize: 'clamp(5rem, 6vw, 7.5rem)', color: '#ffffff', textTransform: 'uppercase', 
+                  letterSpacing: '0.15em', textShadow: '0 1rem 3rem rgba(0,0,0,0.8), 0 0 2rem rgba(251,191,36,0.3)',
+                  opacity: 0, fontFamily: 'var(--font-outfit)', fontWeight: 900,
+                  animation: 'dramaticReveal 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards'
+                }}>
+                  KLASEMEN <span style={{ color: '#fbbf24', textShadow: '0 0 3rem rgba(251,191,36,0.6)' }}>{gameState.rankingTitle || 'AKHIR'}</span>
+                </h1>
+                
+                <div style={{ 
+                  display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: '1.5rem', width: '100%', maxWidth: '160rem', height: '75vh' 
+                }}>
+                  {podiumOrder.map(({ team, rank }, index) => {
+                    const isWinner = rank === 1;
+                    // Delay Animasi: Peringkat bawah muncul duluan
+                    const delay = (rankingTeams.length - rank) * 1.5; 
+                    
+                    // Jarak tinggi dinamis yang diatur manual agar gap juara 1 dan 2 sangat terlihat
+                    const heightPercentages = [100, 72, 58, 46, 36, 28];
+                    const heightPercent = heightPercentages[rank - 1] || 25;
+
+                    return (
+                      <div key={team.id} style={{
+                        flex: isWinner ? 1.5 : 1, // Juara 1 lebih lebar
+                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                        height: `${heightPercent}%`,
+                        opacity: 0, 
+                        animation: `dramaticRise 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards`,
+                        animationDelay: `${delay}s`,
+                        zIndex: isWinner ? 10 : 5,
+                        position: 'relative'
+                      }}>
+                        
+                        {isWinner && (
+                          <div style={{ 
+                            marginBottom: '2rem', 
+                            animation: `crownFloat 3s ease-in-out infinite`, animationDelay: `${delay + 1.5}s`,
+                            color: '#fbbf24', opacity: 0,
+                            animationFillMode: 'forwards'
+                          }}>
+                            {/* Mahkota SVG Keren */}
+                            <svg width="72" height="72" viewBox="0 0 24 24" fill="#fbbf24" stroke="#f59e0b" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 2rem rgba(251,191,36,0.8))' }}>
+                              <polygon points="2 22 22 22 20 8 16 14 12 4 8 14 4 8 2 22" />
+                            </svg>
+                          </div>
+                        )}
+
+                        {/* Kartu Bar Podium */}
+                        <div style={{
+                          background: isWinner 
+                            ? `linear-gradient(to top, ${hexToRgba(team.color, 0.9)} 0%, ${hexToRgba('#fbbf24', 0.5)} 50%, rgba(255,255,255,0.3) 100%)` 
+                            : `linear-gradient(to top, ${hexToRgba(team.color, 0.8)} 0%, ${hexToRgba(team.color, 0.15)} 100%)`,
+                          borderTop: isWinner ? `0.4rem solid #fbbf24` : `0.3rem solid ${team.color}`,
+                          borderLeft: `0.1rem solid ${hexToRgba(team.color, 0.4)}`,
+                          borderRight: `0.1rem solid ${hexToRgba(team.color, 0.4)}`,
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start',
+                          padding: isWinner ? '3rem 1rem' : '2rem 1rem', 
+                          borderRadius: '1.5rem 1.5rem 0 0',
+                          boxShadow: isWinner ? 'none' : `0 -1rem 4rem ${hexToRgba(team.color, 0.3)}, inset 0 2rem 4rem ${hexToRgba(team.color, 0.1)}`,
+                          animation: isWinner ? `fireGlow 2s infinite ease-in-out` : 'none',
+                          animationDelay: `${delay + 1.5}s`, // Mulai membara setelah muncul
+                          position: 'relative', overflow: 'hidden'
+                        }}>
+                          {/* Angka Ranking Halus di Latar */}
+                          <div style={{
+                            position: 'absolute', top: '10%', left: '50%', transform: 'translateX(-50%)',
+                            fontSize: '20rem', fontWeight: 900, color: 'rgba(255,255,255,0.03)',
+                            lineHeight: 0.8, pointerEvents: 'none', zIndex: 0
+                          }}>
+                            {rank}
+                          </div>
+
+                          <span style={{ 
+                            fontSize: isWinner ? '2.4rem' : '1.8rem', 
+                            fontWeight: 600, color: '#94a3b8', 
+                            textTransform: 'uppercase', letterSpacing: '0.1em',
+                            zIndex: 1
+                          }}>
+                            Juara {rank}
+                          </span>
+                          <span style={{ 
+                            fontSize: isWinner ? '3.6rem' : '2.4rem', 
+                            fontWeight: 800, color: '#ffffff', 
+                            marginTop: '1rem', textTransform: 'uppercase', 
+                            letterSpacing: '0.05em', textAlign: 'center',
+                            textShadow: '0 0.5rem 1rem rgba(0,0,0,0.5)', zIndex: 1
+                          }}>
+                            {team.name}
+                          </span>
+                          
+                          {/* Nilai Poin di Bawah */}
+                          <div style={{
+                            marginTop: 'auto', marginBottom: '2rem',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            zIndex: 1
+                          }}>
+                            <span style={{ fontSize: '1.4rem', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Poin Akhir</span>
+                            <span style={{ 
+                              fontSize: isWinner ? '5rem' : '3.6rem', 
+                              fontWeight: 900, color: isWinner ? '#fbbf24' : '#ffffff', 
+                              textShadow: `0 0 2rem ${isWinner ? 'rgba(251,191,36,0.6)' : 'rgba(255,255,255,0.4)'}`, 
+                              fontFamily: 'var(--font-outfit)', lineHeight: 1, marginTop: '0.5rem'
+                            }}>
+                              {team.score.toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+        </>
+      )}
 
     </div>
   );

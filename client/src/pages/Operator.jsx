@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import Swal from 'sweetalert2';
+import ScoringPanel from '../components/operator/ScoringPanel';
+import ActionLogTable from '../components/operator/ActionLogTable';
+import EngineControls from '../components/operator/EngineControls';
 
 // Membuka koneksi Socket.IO client ke backend server
 const socket = io('http://localhost:5000');
@@ -43,7 +46,9 @@ export default function Operator() {
     isBuzzerLocked: false,
     revealScores: true,
     tebakKataPlayer: 1,
-    tebakKataMaxPlayers: 6
+    tebakKataMaxPlayers: 6,
+    showTimerFullScreen: false,
+    showRankingFullScreen: false
   });
 
   // ==========================================
@@ -116,13 +121,20 @@ export default function Operator() {
     const selected = rounds.find((r) => r.id === parseInt(roundId));
     if (selected) {
       setActiveRound(selected);
+      
+      // Jika yang dipilih adalah Tebak Kata, otomatis buka layar timernya
+      const isTebakKata = selected.name.toLowerCase().includes('tebak kata');
+      
       socket.emit('update-game-state', {
         activeRoundId: selected.id,
         timerValue: selected.duration,
         timerMax: selected.duration,
         timerType: selected.timer_type,
         timerStatus: 'stopped',
-        tebakKataPlayer: 1
+        tebakKataPlayer: 1,
+        tebakKataDuration: selected.duration,
+        // Auto sinkronisasi layar jika Tebak Kata dipilih, matikan jika Babak 1/2
+        ...(isTebakKata ? { showTimerFullScreen: true, showRankingFullScreen: false } : { showTimerFullScreen: false, showRankingFullScreen: false })
       });
     }
   };
@@ -204,6 +216,9 @@ export default function Operator() {
       
       // Hapus semua histori log agar perhitungan skor per babak juga kembali ke 0
       await fetch('http://localhost:5000/api/logs', { method: 'DELETE' });
+      
+      // Reset juga state game terkait pengumuman
+      socket.emit('update-game-state', { hasShownKlasemenSementara: false, showRankingFullScreen: false });
       
       Swal.fire({
         title: 'Berhasil!',
@@ -376,8 +391,8 @@ export default function Operator() {
                 <div style={{ display: 'flex', gap: '2rem', marginTop: '1.5rem', fontSize: '1.3rem' }}>
                   <span>
                     Status Mode: {' '}
-                    <strong style={{ color: gameState.showTimerFullScreen ? '#10b981' : '#6366f1', textTransform: 'uppercase' }}>
-                      {gameState.showTimerFullScreen ? 'Mode Cepat Tepat Aktif' : 'Papan Skor Aktif'}
+                    <strong style={{ color: gameState.showRankingFullScreen ? '#fbbf24' : gameState.showTimerFullScreen ? '#10b981' : '#6366f1', textTransform: 'uppercase' }}>
+                      {gameState.showRankingFullScreen ? 'Mode Pengumuman Juara' : gameState.showTimerFullScreen ? 'Timer Tebak Kata Aktif' : 'Papan Skor Aktif'}
                     </strong>
                   </span>
                   <span>
@@ -392,56 +407,104 @@ export default function Operator() {
                 <button 
                   className="btn" 
                   onClick={() => {
-                    // Mengubah status tampilan timer fullscreen di layar proyektor
-                    const nextState = !gameState.showTimerFullScreen;
+                    let updatePayload = { showTimerFullScreen: false, showRankingFullScreen: false };
                     
-                    // Siapkan payload state baru
-                    let newStatePayload = { showTimerFullScreen: nextState };
-                    
-                    if (!nextState) {
-                      // JIKA KEMBALI KE PAPAN SKOR: Otomatis pilih babak "Cerdas Cermat" (jika ada)
-                      const ccRound = rounds.find(r => r.name.toLowerCase().includes('cerdas cermat'));
-                      if (ccRound) {
-                        newStatePayload.activeRoundId = ccRound.id;
-                        newStatePayload.timerValue = ccRound.duration;
-                        newStatePayload.timerMax = ccRound.duration;
-                        newStatePayload.timerType = ccRound.timer_type;
-                        newStatePayload.timerStatus = 'stopped';
-                        setActiveRound(ccRound);
-                      }
-                    } else {
-                      // JIKA MASUK MODE CEPAT TEPAT: Otomatis pilih babak "Tebak Kata" (jika ada)
-                      const tkRound = rounds.find(r => r.name.toLowerCase().includes('tebak kata'));
-                      if (tkRound) {
-                        newStatePayload.activeRoundId = tkRound.id;
-                        newStatePayload.timerValue = tkRound.duration;
-                        newStatePayload.timerMax = tkRound.duration;
-                        newStatePayload.timerType = tkRound.timer_type;
-                        newStatePayload.timerStatus = 'stopped';
-                        setActiveRound(tkRound);
+                    // Jika saat ini berada di Babak Tebak Kata, otomatis kembali ke Babak 1 (atau babak reguler pertama)
+                    if (activeRound && activeRound.name.toLowerCase().includes('tebak kata')) {
+                      const regulerRound = rounds.find(r => !r.name.toLowerCase().includes('tebak kata'));
+                      if (regulerRound) {
+                        updatePayload.activeRoundId = regulerRound.id;
+                        updatePayload.timerValue = regulerRound.duration;
+                        updatePayload.timerMax = regulerRound.duration;
+                        updatePayload.timerType = regulerRound.timer_type;
+                        updatePayload.timerStatus = 'stopped';
+                        setActiveRound(regulerRound);
                       }
                     }
 
-                    // Memancarkan perubahan state sekaligus ke Socket.IO server
-                    socket.emit('update-game-state', newStatePayload);
+                    socket.emit('update-game-state', updatePayload);
                   }} 
                   style={{ 
                     width: '100%', 
-                    background: gameState.showTimerFullScreen 
-                      ? 'linear-gradient(135deg, #10b981, #059669)' 
-                      : 'rgba(255, 255, 255, 0.05)', 
+                    background: (!gameState.showTimerFullScreen && !gameState.showRankingFullScreen) ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'rgba(255, 255, 255, 0.05)', 
                     border: '0.1rem solid rgba(255, 255, 255, 0.1)', 
                     color: '#ffffff' 
                   }}
                 >
-                  {/* Monitor/Screen SVG */}
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                    <line x1="8" y1="21" x2="16" y2="21" />
-                    <line x1="12" y1="17" x2="12" y2="21" />
-                  </svg>
-                  <span>{gameState.showTimerFullScreen ? 'Kembali ke Papan Skor' : 'Tampilkan Mode Cepat Tepat'}</span>
+                  <span>1. Papan Skor Default</span>
                 </button>
+                <button 
+                  className="btn" 
+                  onClick={() => {
+                    const tkRound = rounds.find(r => r.name.toLowerCase().includes('tebak kata'));
+                    
+                    let updatePayload = { showTimerFullScreen: true, showRankingFullScreen: false };
+                    
+                    if (tkRound) {
+                      updatePayload.activeRoundId = tkRound.id;
+                      updatePayload.timerValue = tkRound.duration;
+                      updatePayload.timerMax = tkRound.duration;
+                      updatePayload.timerType = tkRound.timer_type;
+                      updatePayload.timerStatus = 'stopped';
+                      updatePayload.tebakKataDuration = tkRound.duration;
+                      setActiveRound(tkRound);
+                    }
+                    
+                    socket.emit('update-game-state', updatePayload);
+                  }} 
+                  style={{ 
+                    width: '100%', 
+                    background: gameState.showTimerFullScreen ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255, 255, 255, 0.05)', 
+                    border: '0.1rem solid rgba(255, 255, 255, 0.1)', 
+                    color: '#ffffff' 
+                  }}
+                >
+                  <span>2. Timer Tebak Kata</span>
+                </button>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', width: '100%' }}>
+                  <button 
+                    className="btn" 
+                    onClick={() => {
+                      socket.emit('update-game-state', { showTimerFullScreen: false, showRankingFullScreen: true, rankingTitle: 'Sementara', hasShownKlasemenSementara: true, rankingAnimationKey: Date.now() });
+                    }} 
+                    style={{ 
+                      width: '100%', 
+                      background: (gameState.showRankingFullScreen && gameState.rankingTitle === 'Sementara') ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'rgba(255, 255, 255, 0.05)', 
+                      border: '0.1rem solid rgba(255, 255, 255, 0.1)', 
+                      color: '#ffffff',
+                      boxShadow: (gameState.showRankingFullScreen && gameState.rankingTitle === 'Sementara') ? '0 0 1.5rem rgba(245, 158, 11, 0.4)' : 'none',
+                      fontSize: '1.2rem',
+                      padding: '1rem'
+                    }}
+                  >
+                    <span>Klasemen Sementara</span>
+                  </button>
+                  <button 
+                    className="btn" 
+                    disabled={!gameState.hasShownKlasemenSementara}
+                    onClick={() => {
+                      socket.emit('update-game-state', { showTimerFullScreen: false, showRankingFullScreen: true, rankingTitle: 'Akhir', rankingAnimationKey: Date.now() });
+                    }} 
+                    style={{ 
+                      width: '100%', 
+                      background: (gameState.showRankingFullScreen && gameState.rankingTitle === 'Akhir') ? 'linear-gradient(135deg, #f59e0b, #d97706)' : (!gameState.hasShownKlasemenSementara ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.05)'), 
+                      border: '0.1rem solid rgba(255, 255, 255, 0.1)', 
+                      color: !gameState.hasShownKlasemenSementara ? 'rgba(255, 255, 255, 0.3)' : '#ffffff',
+                      boxShadow: (gameState.showRankingFullScreen && gameState.rankingTitle === 'Akhir') ? '0 0 1.5rem rgba(245, 158, 11, 0.4)' : 'none',
+                      fontSize: '1.2rem',
+                      padding: '1rem',
+                      cursor: !gameState.hasShownKlasemenSementara ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    {!gameState.hasShownKlasemenSementara && (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '0.5rem' }}>
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                    )}
+                    <span>Klasemen Akhir</span>
+                  </button>
+                </div>
                 <button
                   className="btn"
                   style={{
@@ -610,401 +673,31 @@ export default function Operator() {
         <div className="grid-auto" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(40rem, 1fr))', alignItems: 'stretch', marginBottom: 0 }}>
           
           {/* Kolom Kiri: Modul Engine Khusus Babak */}
-          {( (activeRound?.timer_type !== 'none' && !activeRound?.name.toLowerCase().includes('tebak kata')) || activeRound?.name.toLowerCase().includes('tebak kata') ) && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem', height: '100%' }}>
-              
-              {/* 3. Timer Engine (Hanya muncul jika bukan babak Tebak Kata) */}
-              {activeRound?.timer_type !== 'none' && !activeRound?.name.toLowerCase().includes('tebak kata') && (
-                <div className="glass-card" style={{ marginBottom: 0, height: '100%' }}>
-              <h2 style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                {/* Clock SVG */}
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-                <span>3. Timer Engine (Kontrol Waktu)</span>
-              </h2>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '2rem', flexWrap: 'wrap' }}>
-                <div style={{ textAlign: 'center', flex: '1 1 20rem', padding: '2rem', background: 'rgba(0,0,0,0.15)', borderRadius: '1.6rem', border: '0.1rem solid rgba(255,255,255,0.05)' }}>
-                  <span style={{ fontSize: '1.3rem', textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>
-                    Sisa Waktu
-                  </span>
-                  <strong style={{ fontSize: '7.2rem', fontFamily: 'var(--font-outfit)', fontWeight: 800, color: gameState.timerValue <= 5 ? '#f43f5e' : '#34d399', letterSpacing: '-0.02em' }}>
-                    {gameState.timerValue} <span style={{ fontSize: '2.4rem', fontWeight: 500 }}>Detik</span>
-                  </strong>
-                  <div style={{ fontSize: '1.2rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                    Status: <strong style={{ textTransform: 'uppercase', color: gameState.timerStatus === 'running' ? '#34d399' : '#f59e0b' }}>{gameState.timerStatus}</strong>
-                  </div>
-                </div>
-
-                {/* Tombol Timer */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', flex: '0 0 24rem' }}>
-                  <button className="btn btn-success" onClick={startTimer} disabled={gameState.timerStatus === 'running'} style={{ width: '100%' }}>
-                    {/* Play SVG */}
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="5 3 19 12 5 21 5 3" />
-                    </svg>
-                    <span>Mulai Waktu</span>
-                  </button>
-                  <button className="btn btn-secondary" onClick={pauseTimer} disabled={gameState.timerStatus !== 'running'} style={{ width: '100%' }}>
-                    {/* Pause SVG */}
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="6" y="4" width="4" height="16" />
-                      <rect x="14" y="4" width="4" height="16" />
-                    </svg>
-                    <span>Jeda Waktu</span>
-                  </button>
-                  <button className="btn btn-danger" onClick={resetTimer} style={{ width: '100%', background: 'rgba(244, 63, 94, 0.08)', border: '0.1rem solid rgba(244, 63, 94, 0.3)', color: '#f1f5f9' }}>
-                    {/* Rotate CCW SVG */}
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                      <polyline points="3 3 3 8 8 8" />
-                    </svg>
-                    <span>Reset Waktu</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-              {/* 4. Tebak Kata Engine (Spesifik Babak Tebak Kata - Merged dengan Cepat Tepat) */}
-              {activeRound?.name.toLowerCase().includes('tebak kata') && (
-                <div className="glass-card" style={{ marginBottom: 0, height: '100%', border: '0.1rem solid #06b6d4', boxShadow: '0 0 2.5rem rgba(6, 182, 212, 0.15)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '1rem', background: 'var(--gradient-accent)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                  {/* Grid/Layout SVG */}
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="7" height="9" />
-                    <rect x="14" y="3" width="7" height="5" />
-                    <rect x="14" y="12" width="7" height="9" />
-                    <rect x="3" y="16" width="7" height="5" />
-                  </svg>
-                  <span>4. Modul Estafet Tebak Kata Terpadu</span>
-                </h2>
-                <span style={{ background: '#06b6d4', color: '#0f172a', fontSize: '1.2rem', padding: '0.4rem 1rem', borderRadius: '0.8rem', fontWeight: 700 }}>
-                  MODUL AKTIF
-                </span>
-              </div>
-
-              {/* Setting Permainan & Timer Timer Khusus */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(20rem, 1fr))', gap: '2rem', background: 'rgba(0,0,0,0.2)', padding: '2rem', borderRadius: '1.2rem', marginBottom: '2.5rem', border: '0.1rem solid rgba(255,255,255,0.05)', alignItems: 'end' }}>
-                {/* Pilihan Tim */}
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.8rem', fontSize: '1.2rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tim yang Bermain:</label>
-                  <select 
-                    className="form-control"
-                    value={gameState.tebakKataActiveTeamId || ''}
-                    onChange={(e) => socket.emit('update-game-state', { tebakKataActiveTeamId: e.target.value ? parseInt(e.target.value) : null })}
-                    style={{ color: '#ffffff', background: '#1e293b' }}
-                  >
-                    <option value="" style={{ color: '#ffffff', background: '#1e293b' }}>-- Pilih Tim --</option>
-                    {teams.map(t => <option key={t.id} value={t.id} style={{ color: '#ffffff', background: '#1e293b' }}>{t.name}</option>)}
-                  </select>
-                </div>
-
-                {/* Durasi per orang */}
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.8rem', fontSize: '1.2rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Waktu / Orang: <strong style={{ color: gameState.timerValue <= 5 ? '#f43f5e' : '#34d399', marginLeft: '0.5rem' }}>{gameState.timerValue}s</strong>
-                  </label>
-                  <input 
-                    type="number" 
-                    className="form-control" 
-                    value={gameState.tebakKataDuration || 30}
-                    onChange={(e) => socket.emit('update-game-state', { tebakKataDuration: parseInt(e.target.value) || 30 })}
-                  />
-                </div>
-
-                {/* Tombol Timer Utama */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
-                  <button 
-                    className="btn btn-success"
-                    style={{ height: '4.5rem', fontSize: '1.4rem' }}
-                    onClick={() => {
-                      socket.emit('timer-reset', gameState.tebakKataDuration || 30);
-                      socket.emit('timer-start');
-                    }}
-                  >
-                    ▶ Mulai
-                  </button>
-                  <button 
-                    className="btn btn-secondary"
-                    style={{ height: '4.5rem', fontSize: '1.4rem' }}
-                    onClick={pauseTimer}
-                  >
-                    ⏸ Jeda
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(25rem, 1fr))', gap: '2rem' }}>
-                {/* Visual Status Player */}
-                <div style={{ background: 'rgba(0,0,0,0.15)', padding: '2.5rem', borderRadius: '1.6rem', textAlign: 'center', border: '0.1rem solid rgba(255, 255, 255, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                  <span style={{ fontSize: '1.3rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Urutan Peserta
-                  </span>
-                  <strong style={{ fontSize: '5.6rem', color: '#06b6d4', margin: '1rem 0', fontFamily: 'var(--font-outfit)', lineHeight: 1 }}>
-                    Player {gameState.tebakKataPlayer}
-                  </strong>
-                  <span style={{ fontSize: '1.2rem', color: 'var(--text-secondary)' }}>
-                    Batas Maksimal: {gameState.tebakKataMaxPlayers} Peserta
-                  </span>
-                </div>
-
-                {/* Tombol Kontrol Estafet */}
-                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '1.5rem', background: 'rgba(0,0,0,0.1)', padding: '2.5rem', borderRadius: '1.6rem', border: '0.1rem dashed rgba(255,255,255,0.1)' }}>
-                  <button className="btn btn-primary" onClick={nextTebakKataPlayer} style={{ background: 'var(--gradient-accent)', padding: '1.5rem', fontSize: '1.4rem' }}>
-                    {/* Skip Forward SVG */}
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="5 4 15 12 5 20 5 4" />
-                      <line x1="19" y1="5" x2="19" y2="19" />
-                    </svg>
-                    <span>Lanjut Player Berikutnya</span>
-                  </button>
-                  <p style={{ fontSize: '1.2rem', color: 'var(--text-secondary)', textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
-                    Klik tombol di atas untuk memindahkan giliran ke peserta selanjutnya (otomatis reset timer).
-                  </p>
-                </div>
-              </div>
-
-              {/* Tombol Input Skor Cepat Tebak Kata */}
-              <div style={{ marginTop: '2.5rem', padding: '2rem', background: 'rgba(255,255,255,0.02)', borderRadius: '1.6rem', border: '0.1rem solid rgba(255,255,255,0.05)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  <span style={{ fontSize: '1.3rem', fontWeight: 600, color: '#f8fafc', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Input Tebak Benar (+{activeRound?.points_correct} Poin)
-                  </span>
-                </div>
-                
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(max(15rem, calc(33.333% - 1rem)), 1fr))', gap: '1.2rem' }}>
-                  {teams.map((t) => (
-                    <button
-                      key={t.id}
-                      className="btn"
-                      style={{ backgroundColor: t.color, padding: '1.4rem', fontSize: '1.6rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', border: 'none', color: '#fff', fontWeight: 700, boxShadow: '0 0.4rem 1rem rgba(0,0,0,0.2)' }}
-                      onClick={() => handleTebakKataSuccess(t.id)}
-                    >
-                      {/* Check SVG */}
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                      <span>{t.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-                </div>
-              )}
-            </div>
-          )}
-
+          <EngineControls 
+            activeRound={activeRound}
+            gameState={gameState}
+            teams={teams}
+            socket={socket}
+            startTimer={startTimer}
+            pauseTimer={pauseTimer}
+            resetTimer={resetTimer}
+            nextTebakKataPlayer={nextTebakKataPlayer}
+            handleTebakKataSuccess={handleTebakKataSuccess}
+          />
           {/* Kolom Kanan: Input Nilai Peserta (Meluas penuh otomatis jika kolom kiri kosong) */}
-          <div className="glass-card" style={{ marginBottom: 0, height: '100%', padding: '1.5rem 2rem' }}>
-            <h2 style={{ margin: 0 }}>Input Nilai Peserta</h2>
-            
-            {/* Banner Konteks Babak Aktif */}
-            <div style={{
-              background: 'rgba(99, 102, 241, 0.15)',
-              border: '0.1rem solid rgba(99, 102, 241, 0.3)',
-              padding: '1.2rem 1.5rem',
-              borderRadius: '0.8rem',
-              color: '#c7d2fe',
-              fontSize: '1.3rem',
-              marginTop: '1rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '1rem'
-            }}>
-              {/* Info SVG */}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="16" x2="12" y2="12" />
-                <line x1="12" y1="8" x2="12.01" y2="8" />
-              </svg>
-              <span>Anda sedang menilai di babak: <strong style={{ color: '#ffffff', fontSize: '1.4rem', textTransform: 'uppercase' }}>{activeRound?.name || 'Pilih Babak'}</strong></span>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(max(20rem, calc(33.333% - 1rem)), 1fr))', gap: '1rem', marginTop: '1.5rem' }}>
-              {teams.map((team) => (
-                <div key={team.id} className="list-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.8rem', padding: '1rem 1.2rem' }}>
-                  {/* Bagian Atas: Dot, Nama Tim, Skor (Stacked Centered Layout) */}
-                  <div style={{ position: 'relative', textAlign: 'center', marginBottom: '0.8rem', padding: '0' }}>
-                    {/* Dot Warna Tim (Kiri Atas) */}
-                    <div style={{ position: 'absolute', left: 0, top: 0, width: '1.4rem', height: '1.4rem', borderRadius: '50%', backgroundColor: team.color, boxShadow: `0 0 1rem ${team.color}40` }} />
-                    
-                    {/* Teks Nama & Skor (Tengah) */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem', padding: '0 2rem' }}>
-                      <strong style={{ fontSize: '1.8rem', color: '#ffffff', letterSpacing: '0.05em', textTransform: 'uppercase', lineHeight: 1.1, textAlign: 'center', wordBreak: 'break-word' }}>
-                        {team.name}
-                      </strong>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '0.5rem' }}>
-                        <span style={{ fontSize: '2.8rem', fontWeight: 800, color: team.color, fontFamily: 'var(--font-outfit)', lineHeight: 1 }}>
-                          {team.roundScores && gameState.activeRoundId ? (team.roundScores[gameState.activeRoundId] || 0) : team.score}
-                        </span>
-                        <span style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginTop: '0.2rem' }}>Poin Babak Ini</span>
-                      </div>
-                      <div style={{ background: 'rgba(255,255,255,0.05)', padding: '0.4rem 1.2rem', borderRadius: '1rem', marginTop: '0.5rem', border: '0.1rem solid rgba(255,255,255,0.1)' }}>
-                        <span style={{ fontSize: '1.1rem', color: 'var(--text-secondary)' }}>
-                          Total Semua Babak: <strong style={{ color: '#ffffff', fontSize: '1.2rem' }}>{team.score}</strong>
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Tombol Tambah/Kurang Poin Default Babak */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', marginBottom: '0.2rem' }}>
-                    <button
-                      className="btn"
-                      style={{ padding: '1rem 0.5rem', fontSize: '1.2rem', background: 'var(--gradient-success)', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', border: 'none', whiteSpace: 'nowrap' }}
-                      onClick={() => handleScoreChange(team.id, activeRound?.points_correct || 100, `Jawaban benar di babak ${activeRound?.name}`)}
-                    >
-                      {/* Check SVG */}
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                      <strong>+{activeRound?.points_correct || 100} Benar</strong>
-                    </button>
-                    <button
-                      className="btn"
-                      style={{ padding: '1rem 0.5rem', fontSize: '1.2rem', background: 'transparent', border: '0.15rem solid #ef4444', color: '#f87171', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}
-                      onClick={() => handleScoreChange(team.id, activeRound?.points_wrong || 0, `Jawaban salah di babak ${activeRound?.name}`)}
-                    >
-                      {/* Cross SVG */}
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                      <strong>{activeRound?.points_wrong || 0} Salah</strong>
-                    </button>
-                  </div>
-
-                  {/* Kustomisasi Skor Tambahan (Tersembunyi by Default) */}
-                  <details style={{ marginTop: '0.2rem' }}>
-                    <summary style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.2rem 0', userSelect: 'none', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 5v14M5 12h14"/>
-                      </svg>
-                      Opsi Poin Kustom
-                    </summary>
-                    <div style={{
-                      display: 'flex',
-                      gap: '0.8rem',
-                      background: 'rgba(0,0,0,0.2)',
-                      borderRadius: '0.8rem',
-                      padding: '1rem',
-                      alignItems: 'center',
-                      border: '0.1rem dashed rgba(255,255,255,0.1)',
-                      marginTop: '0.8rem',
-                      flexWrap: 'wrap'
-                    }}>
-                      <span style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', width: '100%' }}>Poin Kustom:</span>
-                      <input
-                        type="number"
-                        className="form-control"
-                        value={customValue}
-                        onChange={(e) => setCustomValue(parseInt(e.target.value) || 0)}
-                        style={{ flexGrow: 1, width: 'auto', minWidth: '6rem', padding: '0.6rem', fontSize: '1.2rem', textAlign: 'center', background: 'rgba(255,255,255,0.05)', border: '0.1rem solid rgba(255,255,255,0.1)' }}
-                      />
-                      <button
-                        className="btn"
-                        style={{ flexGrow: 1, padding: '0.6rem 1rem', fontSize: '1.1rem', background: 'rgba(52, 211, 153, 0.1)', color: '#34d399', border: '0.1rem solid rgba(52, 211, 153, 0.2)' }}
-                        onClick={() => handleScoreChange(team.id, customValue, `Penambahan manual kustom`)}
-                      >
-                        + Tambah
-                      </button>
-                      <button
-                        className="btn"
-                        style={{ flexGrow: 1, padding: '0.6rem 1rem', fontSize: '1.1rem', background: 'rgba(244, 63, 94, 0.1)', color: '#f87171', border: '0.1rem solid rgba(244, 63, 94, 0.2)' }}
-                        onClick={() => handleScoreChange(team.id, -customValue, `Pengurangan manual kustom`)}
-                      >
-                        - Kurang
-                      </button>
-                    </div>
-                  </details>
-                </div>
-              ))}
-            </div>
-          </div>
+          <ScoringPanel 
+            teams={teams}
+            activeRound={activeRound}
+            gameState={gameState}
+            handleScoreChange={handleScoreChange}
+            customValue={customValue}
+            setCustomValue={setCustomValue}
+          />
 
         </div>
 
         {/* ROW 3: LOG MUTASI SKOR */}
-        <div className="glass-card" style={{ marginBottom: 0, padding: '1.5rem 2rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2 style={{ margin: 0 }}>Log Mutasi Skor</h2>
-                <button
-                  className="btn"
-                  onClick={handleClearLogs}
-                  style={{
-                    background: 'transparent',
-                    color: '#f97316',
-                    border: '0.1rem solid rgba(249, 115, 22, 0.5)',
-                    padding: '0.6rem 1.2rem',
-                    fontSize: '1.2rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    transition: 'all 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(249, 115, 22, 0.1)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                  title="Bersihkan Histori Log"
-                >
-                  {/* Trash SVG */}
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                    <line x1="10" y1="11" x2="10" y2="17" />
-                    <line x1="14" y1="11" x2="14" y2="17" />
-                  </svg>
-                  Bersihkan Log
-                </button>
-              </div>
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '1rem',
-                maxHeight: '30rem',
-                overflowY: 'auto',
-                marginTop: '1.5rem',
-                paddingRight: '0.5rem'
-              }}>
-                {logs.length === 0 ? (
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '1.2rem', textAlign: 'center' }}>
-                    Belum ada mutasi skor.
-                  </p>
-                ) : (
-                  logs.map((log) => (
-                    <div
-                      key={log.id}
-                      style={{
-                        background: 'rgba(255,255,255,0.01)',
-                        borderLeft: `0.3rem solid ${log.change_value >= 0 ? '#10b981' : '#ef4444'}`,
-                        padding: '0.8rem 1.2rem',
-                        borderRadius: '0.4rem',
-                        fontSize: '1.2rem'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyItems: 'center', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '1rem' }}>
-                        <span>{log.timestamp}</span>
-                        <strong>{log.round_name}</strong>
-                      </div>
-                      <div style={{ marginTop: '0.4rem' }}>
-                        Tim <strong>{log.team_name}</strong>:{' '}
-                        <span style={{ color: log.change_value >= 0 ? '#34d399' : '#f87171', fontWeight: 600 }}>
-                          {log.change_value >= 0 ? `+${log.change_value}` : log.change_value} Poin
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: '0.2rem' }}>
-                        {log.description}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+        <ActionLogTable logs={logs} handleClearLogs={handleClearLogs} />
 
       </div>
     </div>
