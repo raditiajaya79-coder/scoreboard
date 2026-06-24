@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { io } from 'socket.io-client';
+import logoUrl from '../../images/kediri-technopark-logo.png';
 
 // Koneksi Socket.IO ke backend server
 const socket = io('http://localhost:5000');
@@ -51,7 +52,6 @@ const AnimatedScore = ({ rawScore, displayScore, teamColor }) => {
 
 export default function Display() {
   // === STATE ===
-  const [eventInfo, setEventInfo] = useState({ name: 'Smart Lomba', date: '', description: '' });
   const [teams, setTeams] = useState([]);
   const [rounds, setRounds] = useState([]);
   const [activeRound, setActiveRound] = useState(null);
@@ -100,12 +100,10 @@ export default function Display() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [evRes, tmRes, rdRes] = await Promise.all([
-          fetch('http://localhost:5000/api/event'),
+        const [tmRes, rdRes] = await Promise.all([
           fetch('http://localhost:5000/api/teams'),
           fetch('http://localhost:5000/api/rounds')
         ]);
-        setEventInfo(await evRes.json());
         setTeams(await tmRes.json());
         setRounds(await rdRes.json());
       } catch (e) {
@@ -126,7 +124,6 @@ export default function Display() {
 
     socket.on('timer-tick', (v) => setGameState(p => ({ ...p, timerValue: v })));
     socket.on('teams-updated', (t) => setTeams(t));
-    socket.on('event-updated', (e) => setEventInfo(e));
     socket.on('buzzer-ready', () => { setBuzzerWinner(null); setShowBuzzerOverlay(false); });
     socket.on('buzzer-triggered', (name) => {
       setBuzzerWinner(name);
@@ -145,7 +142,7 @@ export default function Display() {
       } catch (e) {}
     });
 
-    return () => ['game-state','timer-tick','teams-updated','event-updated','buzzer-ready','buzzer-triggered'].forEach(e => socket.off(e));
+    return () => ['game-state','timer-tick','teams-updated','buzzer-ready','buzzer-triggered'].forEach(e => socket.off(e));
   }, []);
 
   useEffect(() => {
@@ -267,7 +264,7 @@ export default function Display() {
             boxShadow: '0 0.5rem 2rem rgba(0,0,0,0.2)'
           }}>
             <span style={{ fontSize: 'clamp(2rem, 2.5vw, 3rem)', fontWeight: 900, color: '#c7d2fe', textTransform: 'uppercase', letterSpacing: '0.05em', textShadow: '0 0.2rem 0.5rem rgba(0,0,0,0.5)' }}>
-              {eventInfo.name}
+              HUT RI KE-81
             </span>
             <div style={{ width: '0.3rem', height: '3rem', background: 'rgba(255,255,255,0.3)' }} />
             <span style={{ fontSize: 'clamp(1.8rem, 2vw, 2.5rem)', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.15em', textShadow: '0 0.2rem 0.5rem rgba(0,0,0,0.5)' }}>
@@ -287,7 +284,8 @@ export default function Display() {
           alignContent: 'center',
           maxWidth: '100%',
           margin: '0 auto',
-          width: '100%'
+          width: '100%',
+          paddingBottom: '8rem'
         }}>
           {sortedTeams.map((team, idx) => {
             const isBuzzerActive = buzzerWinner === team.name;
@@ -612,6 +610,46 @@ export default function Display() {
         </div>
         </>
       )}
+
+      {/* Powered By Logo - Visible in all modes */}
+      <div style={{
+        position: 'absolute',
+        bottom: showRankingFS ? 'auto' : '2rem',
+        top: showRankingFS ? '2rem' : 'auto',
+        left: showRankingFS ? 'auto' : '50%',
+        right: showRankingFS ? '3rem' : 'auto',
+        transform: showRankingFS ? 'none' : 'translateX(-50%)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '1rem',
+        zIndex: 10000,
+        opacity: 0.85,
+        pointerEvents: 'none',
+        transition: 'all 0.5s ease-in-out'
+      }}>
+        {!showRankingFS && (
+          <span style={{
+            fontSize: '1.4rem',
+            color: 'rgba(255, 255, 255, 0.7)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.15em',
+            fontWeight: 600,
+            fontFamily: "'Outfit', sans-serif"
+          }}>
+            Powered by
+          </span>
+        )}
+        <img 
+          src={logoUrl} 
+          alt="Kediri Technopark Logo" 
+          style={{
+            height: showRankingFS ? '4rem' : '6.5rem',
+            objectFit: 'contain',
+            filter: 'drop-shadow(0 0.2rem 0.5rem rgba(0,0,0,0.5))',
+            transition: 'height 0.5s ease-in-out'
+          }}
+        />
+      </div>
 
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { io } from 'socket.io-client';
+import logoUrl from '../../images/kediri-technopark-logo.png';
 
 // Koneksi Socket.IO ke backend server
 const socket = io('http://localhost:5000');
@@ -98,7 +99,6 @@ export default function TimerDisplay() {
           background: 'rgba(15, 23, 42, 0.95)', border: '0.1rem solid rgba(255, 255, 255, 0.08)',
           borderRadius: '1rem', padding: '0.8rem 1.5rem', display: 'flex', gap: '1rem', boxShadow: '0 1rem 3rem rgba(0, 0, 0, 0.5)'
         }}>
-          <Link to="/dashboard" style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-secondary)', padding: '0.5rem 1rem' }}>Dashboard</Link>
           <Link to="/operator" style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-secondary)', padding: '0.5rem 1rem' }}>Layar Operator</Link>
           <Link to="/display" style={{ fontSize: '1.2rem', fontWeight: 600, color: '#f43f5e', padding: '0.5rem 1rem' }}>Layar Skor</Link>
         </div>
@@ -142,7 +142,7 @@ export default function TimerDisplay() {
 
       {/* Status Timer */}
       <div style={{
-        position: 'absolute', bottom: 'clamp(2rem, 4vh, 4rem)',
+        position: 'absolute', bottom: '10rem',
         fontSize: '1.2rem', color: 'rgba(255,255,255,0.15)',
         textTransform: 'uppercase', letterSpacing: '0.2em'
       }}>
@@ -162,6 +162,41 @@ export default function TimerDisplay() {
           <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
         </svg>
       </button>
+
+      {/* Powered By Logo - Visible in Timer Display */}
+      <div style={{
+        position: 'absolute',
+        bottom: '2rem',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '1rem',
+        zIndex: 10000,
+        opacity: 0.85,
+        pointerEvents: 'none'
+      }}>
+        <span style={{
+          fontSize: '1.4rem',
+          color: 'rgba(255, 255, 255, 0.7)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.15em',
+          fontWeight: 600,
+          fontFamily: "'Outfit', sans-serif"
+        }}>
+          Powered by
+        </span>
+        <img 
+          src={logoUrl} 
+          alt="Kediri Technopark Logo" 
+          style={{
+            height: '6.5rem',
+            objectFit: 'contain',
+            filter: 'drop-shadow(0 0.2rem 0.5rem rgba(0,0,0,0.5))'
+          }}
+        />
+      </div>
+
     </div>
   );
 }
