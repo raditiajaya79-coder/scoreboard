@@ -1,7 +1,82 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import logoUrl from '../../images/kediri-technopark-logo.png';
+
+/**
+ * Komponen: BrandingLogo
+ * Deskripsi: Komponen independen untuk menampilkan logo Kediri Technopark di sudut kanan atas layar tanpa teks "Powered by".
+ *            Dibuat terpisah agar tata letak logo terisolasi dan mudah dikelola secara modular.
+ */
+const BrandingLogo = () => {
+  // Mengembalikan elemen visual logo dalam struktur DOM React
+  return (
+    // Kontainer penampung logo dengan penataan posisi absolut di sudut kanan atas layar
+    <div style={{
+      position: 'absolute', // Menghapus elemen dari alur dokumen normal agar bisa diposisikan secara bebas
+      top: '2.5rem',          // Memberikan margin atas sebesar 2.5rem dari tepi layar agar tidak terlalu mepet
+      right: '3.5rem',         // Memberikan margin kanan sebesar 3.5rem dari tepi layar untuk keseimbangan visual
+      zIndex: 10000,        // Memastikan logo berada pada tumpukan teratas di atas kartu skor dan elemen overlay lainnya
+      pointerEvents: 'none', // Mengabaikan interaksi kursor agar klik mouse menembus ke elemen di bawah logo
+    }}>
+      {/* Gambar logo Kediri Technopark */}
+      <img 
+        src={logoUrl} // Menghubungkan sumber gambar dengan berkas logo Kediri Technopark yang telah diimpor
+        alt="Kediri Technopark Logo" // Menyediakan teks alternatif untuk kebutuhan aksesibilitas pembaca layar (screen reader)
+        style={{
+          height: '4.5rem', // Mengatur dimensi tinggi logo secara responsif menggunakan satuan rem
+          objectFit: 'contain', // Menjaga perbandingan aspek (ratio) logo agar tidak mengalami distorsi/penyok
+          filter: 'drop-shadow(0 0.2rem 0.5rem rgba(0,0,0,0.5))', // Memberikan bayangan lembut di belakang logo untuk keterbacaan yang optimal
+        }}
+      />
+    </div>
+  );
+};
+
+// ==========================================
+// LOGIKA AUDIO WEB AUDIO API (SYNTHESIZER TIMER)
+// ==========================================
+
+// Fungsi pembantu untuk memicu bunyi beeps countdown timer (detik 5 kebawah & buzzer waktu habis)
+const playTimerCountdownSound = (isTimeout) => {
+  try {
+    // Membuat instance AudioContext baru
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime; // Mengambil waktu sekarang dari sistem audio
+    
+    const osc = ctx.createOscillator(); // Membuat unit oscillator
+    const gainNode = ctx.createGain(); // Membuat pengatur amplitudo gain
+    
+    if (isTimeout) {
+      // Buzzer waktu habis: nada rendah gergaji yang kuat selama 0.7 detik
+      osc.type = 'sawtooth'; // Mengatur oscillator bertipe gergaji (sawtooth) agar berdengung tajam
+      osc.frequency.setValueAtTime(180, now); // Mulai dari frekuensi 180Hz
+      osc.frequency.linearRampToValueAtTime(150, now + 0.7); // Frekuensi turun sedikit di akhir
+      
+      gainNode.gain.setValueAtTime(0.25, now); // Volume awal buzzer waktu habis
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.7); // Meluruhkan suara sampai sunyi
+      
+      osc.connect(gainNode); // Menghubungkan osc ke volume
+      gainNode.connect(ctx.destination); // Menghubungkan volume ke sound output speaker
+      osc.start(now); // Memulai bunyi
+      osc.stop(now + 0.75); // Menghentikan oscillator
+    } else {
+      // Countdown detik 5 ke bawah: beep tinggi pendek 800Hz selama 0.08 detik
+      osc.type = 'sine'; // Menggunakan gelombang sinus murni untuk beep
+      osc.frequency.setValueAtTime(800, now); // Detak beep tinggi di frekuensi 800Hz
+      
+      gainNode.gain.setValueAtTime(0.18, now); // Volume detak beep relatif kecil
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.08); // Meluruh cepat dalam 0.08 detik
+      
+      osc.connect(gainNode); // Hubungkan oscillator ke gain
+      gainNode.connect(ctx.destination); // Hubungkan gain ke sound output speaker
+      osc.start(now); // Mulai oscillator
+      osc.stop(now + 0.1); // Hentikan oscillator
+    }
+  } catch (e) {
+    console.error('Gagal memainkan audio timer:', e);
+  }
+};
 
 // Koneksi Socket.IO ke backend server
 const socket = io('http://localhost:5000');
@@ -20,6 +95,28 @@ export default function TimerDisplay() {
   });
   // Babak aktif saat ini
   const [activeRound, setActiveRound] = useState(null);
+
+  // Refs untuk mencatat nilai timer sebelumnya demi membatasi pemicu bunyi ganda
+  const lastTimerValueRef = useRef(gameState.timerValue); // Ref penyimpan nilai detik timer sebelumnya
+  const lastTimerStatusRef = useRef(gameState.timerStatus); // Ref penyimpan status timer sebelumnya
+
+  // Efek samping untuk memantau perubahan waktu timer detik demi detik
+  useEffect(() => {
+    const prevVal = lastTimerValueRef.current; // Membaca nilai detik detik sebelumnya
+    const prevStatus = lastTimerStatusRef.current; // Membaca status timer sebelumnya
+    
+    lastTimerValueRef.current = gameState.timerValue; // Memperbarui ref dengan nilai detik baru
+    lastTimerStatusRef.current = gameState.timerStatus; // Memperbarui ref dengan status timer baru
+    
+    // Bunyi timer beeps countdown: hanya aktif ketika timer dalam status berjalan dan angkanya berkurang
+    if (gameState.timerStatus === 'running' && gameState.timerValue < prevVal) {
+      if (gameState.timerValue >= 1 && gameState.timerValue <= 5) {
+        playTimerCountdownSound(false); // Membunyikan suara beep pendek untuk countdown detik 5 ke bawah
+      } else if (gameState.timerValue === 0 && prevVal > 0) {
+        playTimerCountdownSound(true); // Membunyikan suara buzzer panjang saat waktu timer menyentuh 0 (habis)
+      }
+    }
+  }, [gameState.timerValue, gameState.timerStatus]);
 
   // === EFFECTS & SOCKETS ===
   useEffect(() => {
@@ -163,39 +260,8 @@ export default function TimerDisplay() {
         </svg>
       </button>
 
-      {/* Powered By Logo - Visible in Timer Display */}
-      <div style={{
-        position: 'absolute',
-        bottom: '2rem',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '1rem',
-        zIndex: 10000,
-        opacity: 0.85,
-        pointerEvents: 'none'
-      }}>
-        <span style={{
-          fontSize: '1.4rem',
-          color: 'rgba(255, 255, 255, 0.7)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.15em',
-          fontWeight: 600,
-          fontFamily: "'Outfit', sans-serif"
-        }}>
-          Powered by
-        </span>
-        <img 
-          src={logoUrl} 
-          alt="Kediri Technopark Logo" 
-          style={{
-            height: '6.5rem',
-            objectFit: 'contain',
-            filter: 'drop-shadow(0 0.2rem 0.5rem rgba(0,0,0,0.5))'
-          }}
-        />
-      </div>
+      {/* Menampilkan logo Kediri Technopark secara absolut di bagian kanan atas layar tanpa teks "Powered by" */}
+      <BrandingLogo />
 
     </div>
   );

@@ -9,10 +9,10 @@ import TimerDisplay from './pages/TimerDisplay.jsx';
 
 /**
  * Komponen: Navigation
- * Parameter: user (Object user aktif), onLogout (Callback function logout)
+ * Parameter: user (Object user aktif)
  * Tujuan: Merender navigasi utama sistem dengan icon SVG yang konsisten dan minimalis.
  */
-function Navigation({ user, onLogout }) {
+function Navigation({ user }) {
   // Melacak path URL aktif saat ini untuk styling tautan
   const location = useLocation();
 
@@ -95,15 +95,6 @@ function Navigation({ user, onLogout }) {
         </div>
       </div>
 
-      {/* Profil Operator Aktif */}
-      <div className="nav-profile">
-        <span className="nav-profile-text">
-          Operator: <strong className="nav-profile-name">{user?.username}</strong>
-        </span>
-        <button onClick={onLogout} className="btn btn-secondary" style={{ padding: '0.6rem 1.2rem', fontSize: '1.2rem' }}>
-          Keluar
-        </button>
-      </div>
     </nav>
   );
 }
@@ -113,51 +104,41 @@ function Navigation({ user, onLogout }) {
  * Tujuan: Entry point router client untuk inisialisasi state login dan rute halaman.
  */
 export default function App() {
-  // Load session dari local storage
-  const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem('eccs_user'); // Ambil string user
-    return savedUser ? JSON.parse(savedUser) : null; // Parse JSON
-  });
+  // Mengatur status user secara bawaan (default) sebagai operator agar langsung masuk tanpa login
+  const [user, setUser] = useState({ username: 'operator' });
 
   // Sinkronkan tema dokumen di awal render
   useEffect(() => {
-    const savedTheme = localStorage.getItem('eccs_theme') || 'default'; // Ambil string tema
-    document.documentElement.setAttribute('data-theme', savedTheme); // Terapkan atribut DOM
+    // Mengambil tema tersimpan dari local storage
+    const savedTheme = localStorage.getItem('eccs_theme') || 'default';
+    // Menerapkan tema terpilih ke elemen dokumen root
+    document.documentElement.setAttribute('data-theme', savedTheme);
   }, []);
 
-  // Handler Login
-  const handleLogin = (userData) => {
-    setUser(userData); // Update state user
-    localStorage.setItem('eccs_user', JSON.stringify(userData)); // Simpan di storage
-  };
-
-  // Handler Logout
-  const handleLogout = () => {
-    setUser(null); // Reset state
-    localStorage.removeItem('eccs_user'); // Hapus data dari storage
-  };
-
   return (
+    // Router Pembungkus Utama Aplikasi
     <Router>
+      {/* Kontainer Utama Flexbox Vertikal */}
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <Navigation user={user} onLogout={handleLogout} />
+        {/* Navigasi Utama Aplikasi */}
+        <Navigation user={user} />
+        {/* Kontainer Halaman Utama */}
         <div style={{ flexGrow: 1 }}>
           <Routes>
-            <Route path="/login" element={
-              user ? <Navigate to="/operator" replace /> : <Login onLogin={handleLogin} />
-            } />
-            <Route path="/teams" element={
-              user ? <Teams /> : <Navigate to="/login" replace />
-            } />
-            <Route path="/rounds" element={
-              user ? <Rounds /> : <Navigate to="/login" replace />
-            } />
-            <Route path="/operator" element={
-              user ? <Operator /> : <Navigate to="/login" replace />
-            } />
+            {/* Rute Login: Dialihkan otomatis ke halaman operator */}
+            <Route path="/login" element={<Navigate to="/operator" replace />} />
+            {/* Rute Kelola Tim */}
+            <Route path="/teams" element={<Teams />} />
+            {/* Rute Kelola Babak */}
+            <Route path="/rounds" element={<Rounds />} />
+            {/* Rute Utama Layar Kontrol Operator */}
+            <Route path="/operator" element={<Operator />} />
+            {/* Rute Layar Tampilan Proyektor */}
             <Route path="/display" element={<Display />} />
+            {/* Rute Layar Countdown Timer */}
             <Route path="/timer" element={<TimerDisplay />} />
-            <Route path="*" element={<Navigate to={user ? "/operator" : "/login"} replace />} />
+            {/* Fallback Rute Tidak Dikenal: Dialihkan ke operator */}
+            <Route path="*" element={<Navigate to="/operator" replace />} />
           </Routes>
         </div>
       </div>

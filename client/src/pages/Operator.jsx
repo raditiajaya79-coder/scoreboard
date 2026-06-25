@@ -125,6 +125,9 @@ export default function Operator() {
       // Jika yang dipilih adalah Tebak Kata, otomatis buka layar timernya
       const isTebakKata = selected.name.toLowerCase().includes('tebak kata');
       
+      // Menentukan tim aktif untuk mode Tebak Kata: gunakan tim terpilih sebelumnya jika ada, jika tidak, otomatis gunakan tim pertama dari daftar tim
+      const defaultTeamId = gameState.tebakKataActiveTeamId || ((isTebakKata && teams.length > 0) ? teams[0].id : null);
+      
       socket.emit('update-game-state', {
         activeRoundId: selected.id,
         timerValue: selected.duration,
@@ -133,6 +136,8 @@ export default function Operator() {
         timerStatus: 'stopped',
         tebakKataPlayer: 1,
         tebakKataDuration: selected.duration,
+        // Menyimpan ID tim yang aktif ke dalam state real-time jika di mode Tebak Kata
+        ...(isTebakKata ? { tebakKataActiveTeamId: defaultTeamId } : {}),
         // Auto sinkronisasi layar jika Tebak Kata dipilih, matikan jika Babak 1/2
         ...(isTebakKata ? { showTimerFullScreen: true, showRankingFullScreen: false } : { showTimerFullScreen: false, showRankingFullScreen: false })
       });
@@ -438,7 +443,14 @@ export default function Operator() {
                   onClick={() => {
                     const tkRound = rounds.find(r => r.name.toLowerCase().includes('tebak kata'));
                     
-                    let updatePayload = { showTimerFullScreen: true, showRankingFullScreen: false };
+                    // Menentukan tim aktif untuk mode Tebak Kata: gunakan tim terpilih sebelumnya jika ada, jika tidak, otomatis gunakan tim pertama dari daftar tim
+                    const defaultTeamId = gameState.tebakKataActiveTeamId || (teams.length > 0 ? teams[0].id : null);
+                    
+                    let updatePayload = { 
+                      showTimerFullScreen: true, 
+                      showRankingFullScreen: false,
+                      tebakKataActiveTeamId: defaultTeamId // Otomatis mengisi pilihan tim agar tidak kosong (-- Pilih Tim --)
+                    };
                     
                     if (tkRound) {
                       updatePayload.activeRoundId = tkRound.id;
