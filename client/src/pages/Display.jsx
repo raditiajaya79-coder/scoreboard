@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
-import { Link } from 'react-router-dom';
+// react-router-dom Link tidak diperlukan di halaman display proyektor
 import { io } from 'socket.io-client';
 import logoUrl from '../../images/kediri-technopark-logo.png';
 
@@ -11,23 +11,12 @@ import logoUrl from '../../images/kediri-technopark-logo.png';
 const BrandingLogo = () => {
   // Mengembalikan elemen visual logo dalam struktur DOM React
   return (
-    // Kontainer penampung logo dengan penataan posisi absolut di sudut kanan atas layar
-    <div style={{
-      position: 'absolute', // Menghapus elemen dari alur dokumen normal agar bisa diposisikan secara bebas
-      top: '2.5rem',          // Memberikan margin atas sebesar 2.5rem dari tepi layar agar tidak terlalu mepet
-      right: '3.5rem',         // Memberikan margin kanan sebesar 3.5rem dari tepi layar untuk keseimbangan visual
-      zIndex: 10000,        // Memastikan logo berada pada tumpukan teratas di atas kartu skor dan elemen overlay lainnya
-      pointerEvents: 'none', // Mengabaikan interaksi kursor agar klik mouse menembus ke elemen di bawah logo
-    }}>
+    // Kontainer penampung logo menggunakan class CSS eksternal responsif
+    <div className="display-branding-logo">
       {/* Gambar logo Kediri Technopark */}
       <img 
         src={logoUrl} // Menghubungkan sumber gambar dengan berkas logo Kediri Technopark yang telah diimpor
         alt="Kediri Technopark Logo" // Menyediakan teks alternatif untuk kebutuhan aksesibilitas pembaca layar (screen reader)
-        style={{
-          height: '4.5rem', // Mengatur dimensi tinggi logo secara responsif menggunakan satuan rem
-          objectFit: 'contain', // Menjaga perbandingan aspek (ratio) logo agar tidak mengalami distorsi/penyok
-          filter: 'drop-shadow(0 0.2rem 0.5rem rgba(0,0,0,0.5))', // Memberikan bayangan lembut di belakang logo untuk keterbacaan yang optimal
-        }}
       />
     </div>
   );
@@ -37,189 +26,526 @@ const BrandingLogo = () => {
 // KUMPULAN LOGIKA AUDIO WEB AUDIO API (SYNTHESIZER)
 // ==========================================
 
-// Fungsi pembantu untuk memicu bunyi Chime saat poin tim bertambah (Nada C5 -> E5 -> G5)
+// Konteks audio global tunggal yang digunakan kembali untuk mencegah batas maksimal AudioContext browser terlampaui
+let globalAudioCtx = null;
+
+/**
+ * Fungsi: getAudioContext
+ * Deskripsi: Mengembalikan satu-satunya instance AudioContext yang aktif (singleton).
+ *            Mengaktifkan kembali (resume) jika ditangguhkan oleh browser.
+ */
+const getAudioContext = () => {
+  // Jika konteks audio belum dibuat, inisialisasi baru
+  if (!globalAudioCtx) {
+    globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  // Aktifkan kembali konteks audio jika dalam keadaan tersuspensi (kebijakan autoplay browser)
+  if (globalAudioCtx.state === 'suspended') {
+    globalAudioCtx.resume();
+  }
+  // Mengembalikan instance konteks audio
+  return globalAudioCtx;
+};
+
+// Fungsi pembantu global untuk mendapatkan ambang batas waktu kritis (danger threshold) secara dinamis
+const getDangerThreshold = (maxVal) => {
+  // Jika durasi maksimal 60 detik atau lebih (misal 60s, 90s, dst), ambang kritisnya adalah 10 detik terakhir
+  if (maxVal >= 60) return 10;
+  // Jika durasi maksimal di atas 30 detik tetapi di bawah 60, ambang kritisnya adalah 8 detik terakhir
+  if (maxVal >= 30) return 8;
+  // Jika durasi maksimal di atas 15 detik tetapi di bawah 30, ambang kritisnya adalah 5 detik terakhir
+  if (maxVal >= 15) return 5;
+  // Untuk waktu yang sangat pendek (di bawah 15 detik), ambang kritisnya adalah 3 detik terakhir
+  return 3;
+};
+
+/**
+ * Fungsi: playScoreAddSound
+ * Deskripsi: Memicu bunyi lonceng naik (Chime chord C Major) dengan volume yang lebih kencang (0.45) agar lebih terdengar jelas.
+ */
 const playScoreAddSound = () => {
   try {
-    // Membuat instance AudioContext baru untuk rendering suara
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const now = ctx.currentTime; // Mengambil waktu sekarang dari konteks audio
-    
+    // Mendapatkan konteks audio tunggal
+    const ctx = getAudioContext();
+    // Mendapatkan stempel waktu saat ini dari konteks audio
+    const now = ctx.currentTime;
     // Nada-nada yang membentuk chord major C (C5 = 523.25Hz, E5 = 659.25Hz, G5 = 783.99Hz)
     const notes = [523.25, 659.25, 783.99];
     
+    // Looping untuk menjadwalkan setiap nada dengan jeda arpeggio 180ms
     notes.forEach((freq, idx) => {
-      // Membuat oscillator generator gelombang
+      // Membuat oscillator generator gelombang suara
       const osc = ctx.createOscillator();
-      // Mengatur tipe oscillator ke gelombang sinus agar berbunyi jernih lembut seperti lonceng
+      // Mengatur jenis gelombang ke sinus (sine) agar berbunyi jernih lembut seperti bel
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, now + idx * 0.08); // Penundaan sekuensial antar nada
+      // Menyetel frekuensi nada dengan jeda arpeggio 180ms antar nada
+      osc.frequency.setValueAtTime(freq, now + idx * 0.18);
       
       // Membuat pengatur volume gain node
       const gainNode = ctx.createGain();
-      // Volume mulai dari 0, melesat ke 0.15, lalu meluruh habis
-      gainNode.gain.setValueAtTime(0, now + idx * 0.08);
-      gainNode.gain.linearRampToValueAtTime(0.15, now + idx * 0.08 + 0.02);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.25);
+      // Menginisialisasi volume dari nol sebelum nada berbunyi
+      gainNode.gain.setValueAtTime(0, now + idx * 0.18);
+      // Volume dinaikkan ke tingkat yang lebih kencang (0.45) dalam waktu 30ms
+      gainNode.gain.linearRampToValueAtTime(0.45, now + idx * 0.18 + 0.03);
+      // Meluruhkan volume secara eksponensial hingga sunyi dalam waktu 450ms
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.18 + 0.45);
       
-      // Menghubungkan node oscillator -> gain -> speaker
+      // Menghubungkan output osilator ke pengatur volume
       osc.connect(gainNode);
+      // Menghubungkan pengatur volume ke speaker output
       gainNode.connect(ctx.destination);
       
-      // Memulai dan mengakhiri bunyi nada ke-n
-      osc.start(now + idx * 0.08);
-      osc.stop(now + idx * 0.08 + 0.3);
+      // Menjalankan nada secara terjadwal
+      osc.start(now + idx * 0.18);
+      // Menghentikan nada secara terjadwal
+      osc.stop(now + idx * 0.18 + 0.5);
     });
   } catch (e) {
+    // Menangani error jika audio gagal dijalankan
     console.error('Gagal memainkan audio tambah skor:', e);
   }
 };
 
-// Fungsi pembantu untuk memicu bunyi Buzz saat poin tim berkurang (Nada gergaji merosot)
+/**
+ * Fungsi: playScoreSubSound
+ * Deskripsi: Memicu bunyi dengung sekuensial dua nada (tett-tott) dengan volume yang lebih mantap dan kencang (0.50).
+ */
 const playScoreSubSound = () => {
   try {
-    // Membuat instance AudioContext baru
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const now = ctx.currentTime; // Waktu saat ini dari server audio browser
+    // Mendapatkan konteks audio tunggal
+    const ctx = getAudioContext();
+    // Mendapatkan stempel waktu saat ini
+    const now = ctx.currentTime;
     
-    const osc = ctx.createOscillator();
-    // Menggunakan gelombang segitiga agar suara buzz terdengar tegas namun tidak kasar di telinga
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(220, now); // Mulai dari nada A3 (220Hz)
-    osc.frequency.exponentialRampToValueAtTime(110, now + 0.25); // Melorot ke 110Hz dalam 0.25 detik
+    // --- Nada Pertama ("tett") ---
+    // Membuat oscillator untuk nada pertama
+    const osc1 = ctx.createOscillator();
+    // Membuat gain node untuk volume nada pertama
+    const g1 = ctx.createGain();
     
-    const gainNode = ctx.createGain();
-    gainNode.gain.setValueAtTime(0.2, now); // Set amplitudo gain awal
-    gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.3); // Fade out pelan hingga sunyi
+    // Tipe gelombang gigi gergaji (sawtooth) agar berdengung tajam
+    osc1.type = 'sawtooth';
+    // Nada pertama berada pada frekuensi 160Hz
+    osc1.frequency.setValueAtTime(160, now);
     
-    osc.connect(gainNode);
-    gainNode.connect(ctx.destination);
+    // Mengatur volume mulai dari nol agar tidak ada letupan audio
+    g1.gain.setValueAtTime(0, now);
+    // Terdengar lebih kencang (0.50) dalam waktu 20ms
+    g1.gain.linearRampToValueAtTime(0.50, now + 0.02);
+    // Meluruhkan volume secara eksponensial dalam waktu 230ms (tett yang lebih mantap)
+    g1.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
     
-    osc.start(now); // Mulai oscillator
-    osc.stop(now + 0.3); // Hentikan setelah 0.3 detik
+    // Menghubungkan osc1 ke volume, dan volume ke speaker
+    osc1.connect(g1);
+    g1.connect(ctx.destination);
+    
+    // Memulai nada pertama instan
+    osc1.start(now);
+    // Menghentikan nada pertama setelah 260ms
+    osc1.stop(now + 0.26);
+
+    // --- Nada Kedua ("tott") ---
+    // Membuat oscillator untuk nada kedua
+    const osc2 = ctx.createOscillator();
+    // Membuat gain node untuk volume nada kedua
+    const g2 = ctx.createGain();
+    
+    // Menggunakan gelombang gigi gergaji agar tekstur suaranya seragam
+    osc2.type = 'sawtooth';
+    // Nada kedua berada pada frekuensi lebih rendah (110Hz) dimulai setelah 280ms jeda (tempo diperlambat)
+    osc2.frequency.setValueAtTime(110, now + 0.28);
+    
+    // Volume dimulai dari nol saat nada kedua mulai berbunyi (pada detik ke-0.28)
+    g2.gain.setValueAtTime(0, now + 0.28);
+    // Terdengar lebih kencang (0.50) dalam waktu 20ms setelah dimulai
+    g2.gain.linearRampToValueAtTime(0.50, now + 0.28 + 0.02);
+    // Meluruhkan volume secara eksponensial selama 330ms hingga sunyi
+    g2.gain.exponentialRampToValueAtTime(0.001, now + 0.28 + 0.35);
+    
+    // Menghubungkan osc2 ke volume, dan volume ke speaker
+    osc2.connect(g2);
+    g2.connect(ctx.destination);
+    
+    // Memulai nada kedua setelah jeda 280ms
+    osc2.start(now + 0.28);
+    // Menghentikan nada kedua setelah selesai berbunyi
+    osc2.stop(now + 0.28 + 0.37);
   } catch (e) {
+    // Menangani error jika audio gagal dijalankan
     console.error('Gagal memainkan audio kurang skor:', e);
   }
 };
 
-// Fungsi pembantu untuk memicu bunyi beeps countdown timer (detik 5 kebawah & buzzer waktu habis)
-const playTimerCountdownSound = (isTimeout) => {
-  try {
-    // Membuat instance AudioContext baru
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const now = ctx.currentTime;
-    
-    const osc = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-    
-    if (isTimeout) {
-      // Buzzer waktu habis: nada rendah gergaji yang kuat selama 0.7 detik
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(180, now);
-      osc.frequency.linearRampToValueAtTime(150, now + 0.7);
-      
-      gainNode.gain.setValueAtTime(0.25, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
-      
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.75);
-    } else {
-      // Countdown detik 5 ke bawah: beep tinggi pendek 800Hz selama 0.08 detik
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(800, now);
-      
-      gainNode.gain.setValueAtTime(0.18, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-      
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.1);
-    }
-  } catch (e) {
-    console.error('Gagal memainkan audio timer:', e);
-  }
-};
-
-// Fungsi pembantu untuk memicu bunyi pad/whoosh sinematik saat layar klasemen dipanggil
+/**
+ * Fungsi: playStandingsWhooshSound
+ * Deskripsi: Memicu suara backsound klasemen yang bersemangat tinggi (tidak letoy).
+ *            Memadukan dampak kick boom menghentak di awal dengan synthesizer brass swell yang menyapu naik.
+ */
 const playStandingsWhooshSound = () => {
   try {
-    // Membuat instance AudioContext baru
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // Mendapatkan konteks audio tunggal
+    const ctx = getAudioContext();
+    // Mendapatkan stempel waktu saat ini
     const now = ctx.currentTime;
     
-    // Jalur 1: Sub Bass Sweep (memberikan getaran berat dramatis)
-    const oscSub = ctx.createOscillator();
-    oscSub.type = 'sine';
-    oscSub.frequency.setValueAtTime(70, now);
-    oscSub.frequency.exponentialRampToValueAtTime(160, now + 1.2);
+    // 1. Kick/Impact Boom Menghentak (Punchy) di Awal
+    const oscKick = ctx.createOscillator();
+    const gainKick = ctx.createGain();
+    // Gelombang segitiga agar hentakan bass empuk dan solid
+    oscKick.type = 'triangle';
+    // Mulai dari 150Hz
+    oscKick.frequency.setValueAtTime(150, now);
+    // Menyapu frekuensi dengan sangat cepat ke bawah dalam 500ms
+    oscKick.frequency.exponentialRampToValueAtTime(0.01, now + 0.5);
+    // Volume hentakan diatur sangat keras (0.7) untuk sensasi benturan dinamis
+    gainKick.gain.setValueAtTime(0.7, now);
+    gainKick.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
     
-    const gainSub = ctx.createGain();
-    gainSub.gain.setValueAtTime(0, now);
-    gainSub.gain.linearRampToValueAtTime(0.3, now + 0.3);
-    gainSub.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+    oscKick.connect(gainKick);
+    gainKick.connect(ctx.destination);
+    oscKick.start(now);
+    oscKick.stop(now + 0.55);
     
-    oscSub.connect(gainSub);
-    gainSub.connect(ctx.destination);
-    oscSub.start(now);
-    oscSub.stop(now + 1.2);
-    
-    // Jalur 2: Synth Chord Swell (nada harmoni menyapu lembut)
-    const freqs = [220, 277.18, 329.63, 440]; // Chord A Major (A3, C#4, E4, A4)
+    // 2. Synthesizer Brass Swell yang Semangat (Chord Major Bergelombang Gigi Gergaji)
+    // Frekuensi chord A Major: A3 (220Hz), E4 (329.63Hz), A4 (440Hz), C#5 (554.37Hz)
+    const freqs = [220, 329.63, 440, 554.37];
     freqs.forEach((f) => {
+      // Membuat osilator nada
       const osc = ctx.createOscillator();
-      osc.type = 'triangle';
+      // Gelombang gigi gergaji (sawtooth) agar menghasilkan karakter brass/terompet yang kencang dan bersemangat
+      osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(f, now);
-      osc.frequency.exponentialRampToValueAtTime(f * 1.5, now + 1.5); // Efek bend frekuensi ke atas
+      // Menyapu frekuensi nada ke atas (1.2x) secara eksponensial dalam 2.8 detik
+      osc.frequency.exponentialRampToValueAtTime(f * 1.2, now + 2.8);
       
+      // Menggunakan BiquadFilter untuk filter sweep (membuat suara membuka megah)
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      // Frekuensi filter mulai sangat rendah di 200Hz
+      filter.frequency.setValueAtTime(200, now);
+      // Menyapu naik ke 2500Hz dalam 1.2 detik (membuka warna suara agar terang cemerlang)
+      filter.frequency.exponentialRampToValueAtTime(2500, now + 1.2);
+      
+      // Membuat gain node volume
       const gainNode = ctx.createGain();
       gainNode.gain.setValueAtTime(0, now);
-      gainNode.gain.linearRampToValueAtTime(0.08, now + 0.4); // Fade in lambat (swell)
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 1.5); // Fade out pelan
+      // Volume membumbung kencang ke 0.35 dalam waktu 1.0 detik (efek swell brass yang bertenaga)
+      gainNode.gain.linearRampToValueAtTime(0.35, now + 1.0);
+      // Meluruhkan secara perlahan selama durasi transisi panggung 2.8 detik
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 2.8);
       
-      osc.connect(gainNode);
+      // Hubungkan osc -> filter -> gain -> speaker
+      osc.connect(filter);
+      filter.connect(gainNode);
       gainNode.connect(ctx.destination);
+      
+      // Jalankan suara chord
       osc.start(now);
-      osc.stop(now + 1.6);
+      // Hentikan suara chord setelah 2.9 detik
+      osc.stop(now + 2.9);
     });
   } catch (e) {
+    // Menangani kegagalan inisialisasi pad whoosh
     console.error('Gagal memainkan audio panggung klasemen:', e);
   }
 };
 
+/**
+ * Fungsi: playModeChangeSound
+ * Deskripsi: Memicu bunyi bel transisi mode kuis yang sangat tenang, lembut, dan premium (kalem).
+ *            Menggunakan gelombang sinus dengan volume tipis (0.12) dan arpeggio naik cepat.
+ */
+const playModeChangeSound = () => {
+  try {
+    // Mengambil atau menginisialisasi konteks audio tunggal aplikasi
+    const ctx = getAudioContext();
+    // Mendapatkan stempel waktu terkini dari konteks audio
+    const now = ctx.currentTime;
+    // Menyiapkan susunan nada harmonis (E5 = 659.25Hz dan A5 = 880Hz) untuk melodi naik
+    const notes = [659.25, 880.00];
+    
+    // Menjadwalkan setiap nada secara sekuensial dengan jeda waktu arpeggio singkat 80ms
+    notes.forEach((freq, idx) => {
+      // Membuat generator osilasi gelombang suara baru
+      const osc = ctx.createOscillator();
+      // Mengatur tipe gelombang ke sine wave agar menghasilkan suara murni yang bulat dan lembut
+      osc.type = 'sine';
+      // Menyetel frekuensi target tepat pada waktu mulai nada yang bersangkutan
+      osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+      
+      // Membuat node gain sebagai pengatur intensitas volume
+      const g = ctx.createGain();
+      // Memulai volume dari kesunyian mutlak (0) untuk mencegah distorsi letupan awal
+      g.gain.setValueAtTime(0, now + idx * 0.08);
+      // Menaikkan volume dengan kemiringan linier ke tingkat tipis 0.12 dalam 20 milidetik
+      g.gain.linearRampToValueAtTime(0.12, now + idx * 0.08 + 0.02);
+      // Meluruhkan volume secara eksponensial ke nol dalam rentang 300 milidetik agar suara memudar alami
+      g.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.3);
+      
+      // Menghubungkan jalur keluaran osilator ke pengatur volume
+      osc.connect(g);
+      // Menghubungkan pengatur volume ke tujuan audio utama (speaker perangkat)
+      g.connect(ctx.destination);
+      
+      // Menjadwalkan osilator untuk mulai memancarkan getaran suara
+      osc.start(now + idx * 0.08);
+      // Menjadwalkan pemutusan suara agar osilator berhenti memproses getaran
+      osc.stop(now + idx * 0.08 + 0.35);
+    });
+  } catch (e) {
+    // Mencatat detail kesalahan ke konsol jika sistem Web Audio gagal dijalankan
+    console.error('Gagal memainkan suara ganti mode:', e);
+  }
+};
+
+/**
+ * Fungsi: playTickSound
+ * Deskripsi: Memicu suara ketukan detik (tick/tock) dengan volume yang ditingkatkan agar terdengar kencang di seluruh ruangan.
+ */
+const playTickSound = (secondsLeft, maxVal) => {
+  try {
+    // Mendapatkan konteks audio tunggal
+    const ctx = getAudioContext();
+    // Mendapatkan waktu sekarang
+    const now = ctx.currentTime;
+    // Membuat oscillator generator gelombang suara
+    const osc = ctx.createOscillator();
+    // Membuat gain node pengatur volume
+    const g = ctx.createGain();
+    
+    // Menghubungkan oscillator ke gain, dan gain ke speaker
+    osc.connect(g);
+    g.connect(ctx.destination);
+    
+    // Mendapatkan batas waktu kritis secara dinamis berdasarkan durasi maksimal
+    const threshold = getDangerThreshold(maxVal || 30);
+    
+    // Memeriksa apakah sisa waktu berada di bawah atau sama dengan ambang kritis
+    if (secondsLeft <= threshold) {
+      // Beep peringatan kritis: gelombang sinus tinggi nyaring 850Hz, volume ditingkatkan sangat keras (0.90)
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(850, now);
+      g.gain.setValueAtTime(0.90, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      osc.start(now);
+      osc.stop(now + 0.15);
+    } else {
+      // Detik biasa: gelombang segitiga woodblock hangat 400Hz, volume ditingkatkan keras (0.60)
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(400, now);
+      g.gain.setValueAtTime(0.60, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      osc.start(now);
+      osc.stop(now + 0.08);
+    }
+  } catch (error) {
+    // Log kegagalan suara detikan
+    console.error('Gagal memutar detikan:', error);
+  }
+};
+
+/**
+ * Fungsi: playAlarmSound
+ * Deskripsi: Memicu suara bel alarm/buzzer selesai dengan volume yang ditingkatkan sangat keras (0.85).
+ */
+const playAlarmSound = () => {
+  try {
+    // Mendapatkan konteks audio tunggal
+    const ctx = getAudioContext();
+    // Mendapatkan stempel waktu saat ini
+    const now = ctx.currentTime;
+    // Membuat dua osilator untuk efek suara alarm mendengung kencang
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    // Membuat gain node pengatur volume
+    const g = ctx.createGain();
+    
+    // Menyetel osilator pertama ke gelombang gergaji (sawtooth) frekuensi 180Hz
+    osc1.type = 'sawtooth';
+    osc1.frequency.setValueAtTime(180, now);
+    
+    // Menyetel osilator kedua ke gelombang kotak (square) frekuensi 185Hz
+    osc2.type = 'square';
+    osc2.frequency.setValueAtTime(185, now);
+    
+    // Menghubungkan kedua osilator ke gain node
+    osc1.connect(g);
+    osc2.connect(g);
+    // Menghubungkan gain node ke speaker
+    g.connect(ctx.destination);
+    
+    // Menyetel volume puncak alarm ke tingkat sangat keras (0.85)
+    g.gain.setValueAtTime(0.85, now);
+    // Mempertahankan volume kencang selama 800ms
+    g.gain.linearRampToValueAtTime(0.85, now + 0.8);
+    // Meluruhkan volume secara eksponensial ke sunyi hingga detik ke-1.2
+    g.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+    
+    // Menjalankan alarm secara serentak
+    osc1.start(now);
+    osc2.start(now);
+    
+    // Menghentikan alarm setelah 1.2 detik
+    osc1.stop(now + 1.2);
+    osc2.stop(now + 1.2);
+  } catch (error) {
+    // Log kegagalan alarm habis
+    console.error('Gagal memutar alarm selesai:', error);
+  }
+};
+
+/**
+ * Fungsi: playPodiumRiseSound
+ * Deskripsi: Memicu efek suara kemunculan tiang peringkat secara sekuensial.
+ *            Peringkat bawah-ke-2 mendapatkan efek bunyi reveal chord segitiga yang berenergi dan mantap (semangat).
+ *            Peringkat 1 mendapatkan efek bunyi mahkota yang megah, sinematik, hangat (triangle sweep) dan tidak "alay".
+ */
+const playPodiumRiseSound = (rank) => {
+  try {
+    // Mengambil atau menginisialisasi konteks audio tunggal aplikasi
+    const ctx = getAudioContext();
+    // Mendapatkan stempel waktu terkini dari konteks audio
+    const now = ctx.currentTime;
+    
+    // Mengevaluasi jika tiang yang naik adalah milik Juara Pertama (Pemenang Utama)
+    if (rank === 1) {
+      // Hentikan pemutaran audio juara 1 sebelumnya jika objek audio masih aktif berjalan
+      if (activeWinnerAudio) {
+        // Menghentikan (pause) pemutaran audio
+        activeWinnerAudio.pause();
+        // Menyetel ulang referensi audio ke null
+        activeWinnerAudio = null;
+      }
+      
+      // Membuat instans objek Audio baru yang memuat berkas MP3 dari server backend
+      const audio = new Audio('http://localhost:5000/sound/tunetank-winner-awards.mp3');
+      // Menyetel tingkat kekerasan volume MP3 Juara 1 secara kencang dan tebal di angka 0.85
+      audio.volume = 0.85;
+      // Menyimpan referensi objek audio baru ke variabel global agar dapat dihentikan saat keluar layar
+      activeWinnerAudio = audio;
+      
+      // Menjalankan pemutaran musik kemenangan Juara 1 secara asinkron
+      audio.play().catch(err => {
+        // Mencatat kegagalan pemutaran MP3 Juara 1 jika ada pembatasan hak akses browser
+        console.error('Gagal memainkan MP3 Juara 1:', err);
+      });
+    } else {
+      // Menyiapkan chord arpeggio naik berenergi untuk peringkat lainnya (G3 = 196.0Hz, C4 = 261.63Hz, E4 = 329.63Hz)
+      const freqs = [196.00, 261.63, 329.63];
+      // Melakukan perulangan untuk menjadwalkan peluncuran nada dengan jeda arpeggio sangat cepat 50ms
+      freqs.forEach((freq, idx) => {
+        // Membuat generator osilasi gelombang suara baru
+        const osc = ctx.createOscillator();
+        // Membuat pengatur volume (gain) baru
+        const g = ctx.createGain();
+        // Menggunakan gelombang segitiga (triangle) agar suara terdengar penuh semangat namun tetap berbobot
+        osc.type = 'triangle';
+        // Menyetel frekuensi nada target sesuai jadwal arpeggio masing-masing
+        osc.frequency.setValueAtTime(freq, now + idx * 0.05);
+        
+        // Menginisialisasi volume dari nol pada waktu mulai nada
+        g.gain.setValueAtTime(0, now + idx * 0.05);
+        // Menaikkan volume dengan cepat ke tingkat mantap 0.45 dalam waktu 30ms setelah nada dipicu
+        g.gain.linearRampToValueAtTime(0.45, now + idx * 0.05 + 0.03);
+        // Meluruhkan volume secara eksponensial ke nol dalam durasi 500ms agar berdenting alami
+        g.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.5);
+        
+        // Menghubungkan keluaran osilator langsung ke pengatur volume
+        osc.connect(g);
+        // Menghubungkan pengatur volume ke speaker perangkat
+        g.connect(ctx.destination);
+        
+        // Menyalakan osilator sesuai jadwal arpeggio
+        osc.start(now + idx * 0.05);
+        // Menghentikan osilator setelah nada meluruh sepenuhnya (600ms)
+        osc.stop(now + idx * 0.05 + 0.6);
+      });
+    }
+  } catch (e) {
+    // Mencatat detail kegagalan sistem Web Audio ke konsol pengembang
+    console.error('Gagal memutar audio podium naik:', e);
+  }
+};
+
+// Referensi global untuk mencatat objek audio MP3 pemenang juara 1 yang sedang diputar
+let activeWinnerAudio = null;
+
 // Koneksi Socket.IO ke backend server
 const socket = io('http://localhost:5000');
 
-const AnimatedScore = ({ rawScore, displayScore, teamColor }) => {
-  const [prevScore, setPrevScore] = useState(rawScore);
+/**
+ * Komponen: AnimatedScore
+ * Deskripsi: Komponen anak penampil nilai skor tim dengan efek visual pertambahan/pengurangan poin,
+ *            dilengkapi ref-based tracking untuk memastikan suara chime/buzz terpicu tepat 1 kali tanpa inkonsistensi.
+ *            Ditambahkan tracking babak aktif agar suara perubahan poin tidak berbunyi ketika babak/mode berganti.
+ */
+const AnimatedScore = ({ rawScore, displayScore, teamColor, activeRoundId }) => {
+  // Menggunakan useRef untuk mencatat nilai skor sebelumnya secara sinkron tanpa memicu siklus re-render ekstra
+  const prevScoreRef = useRef(rawScore);
+  // Menggunakan useRef untuk mencatat ID babak sebelumnya guna mendeteksi peralihan babak
+  const prevRoundRef = useRef(activeRoundId);
+  // State lokal untuk melacak kelas animasi aktif
   const [animClass, setAnimClass] = useState('');
 
+  // Efek samping untuk memantau perubahan nilai rawScore dan activeRoundId
   useEffect(() => {
-    if (rawScore > prevScore) {
+    // Membaca ID babak sebelumnya dari ref
+    const prevRound = prevRoundRef.current;
+    // Jika ID babak berubah, sinkronkan nilai skor tanpa memutar audio atau animasi
+    if (prevRound !== activeRoundId) {
+      // Memperbarui ref babak sebelumnya ke babak saat ini
+      prevRoundRef.current = activeRoundId;
+      // Memperbarui ref skor sebelumnya ke nilai skor awal babak baru
+      prevScoreRef.current = rawScore;
+      // Berhenti dan keluar dari efek samping agar tidak memicu deteksi selisih
+      return;
+    }
+
+    // Membaca nilai skor sebelumnya dari ref
+    const prev = prevScoreRef.current;
+    
+    // Kasus 1: Skor bertambah
+    if (rawScore > prev) {
+      // Memasang kelas animasi hijau pop up
       setAnimClass('score-increase');
-      setPrevScore(rawScore);
-      playScoreAddSound(); // Memainkan bunyi chime naik saat nilai skor tim bertambah
+      // Memutar efek suara lonceng chime naik
+      playScoreAddSound();
+      // Menghapus kelas animasi setelah durasi 600ms selesai
       const timer = setTimeout(() => setAnimClass(''), 600);
+      // Memperbarui ref dengan nilai skor terbaru agar tersinkronisasi
+      prevScoreRef.current = rawScore;
+      // Membersihkan timer jika rawScore berubah lagi sebelum selesai
       return () => clearTimeout(timer);
-    } else if (rawScore < prevScore) {
+    } 
+    // Kasus 2: Skor berkurang
+    else if (rawScore < prev) {
+      // Memasang kelas animasi merah bergetar
       setAnimClass('score-decrease');
-      setPrevScore(rawScore);
-      playScoreSubSound(); // Memainkan bunyi buzz turun ketika skor tim dikurangi
+      // Memutar efek suara dengung buzz turun
+      playScoreSubSound();
+      // Menghapus kelas animasi setelah durasi 500ms selesai
       const timer = setTimeout(() => setAnimClass(''), 500);
+      // Memperbarui ref dengan nilai skor terbaru agar tersinkronisasi
+      prevScoreRef.current = rawScore;
+      // Membersihkan timer
       return () => clearTimeout(timer);
     }
-  }, [rawScore, prevScore]);
+  }, [rawScore, activeRoundId]);
 
-  // helper function to ensure rgba conversion if needed
+  // Fungsi pembantu lokal untuk konversi kode warna HEX ke RGBA demi bayangan glow
   const hexToRgbaLocal = (hex, alpha) => {
+    // Mengurai komponen warna merah (R)
     const r = parseInt(hex.slice(1, 3), 16);
+    // Mengurai komponen warna hijau (G)
     const g = parseInt(hex.slice(3, 5), 16);
+    // Mengurai komponen warna biru (B)
     const b = parseInt(hex.slice(5, 7), 16);
+    // Mengembalikan string format warna RGBA
     return `rgba(${r},${g},${b},${alpha})`;
   };
 
   return (
+    // Kontainer penampil skor dengan animasi dinamis dan gaya berpijar sesuai warna tim
     <div className={`score-text ${animClass}`} style={{ 
       fontSize: 'clamp(8rem, 12vw, 14rem)', 
       fontWeight: 900, 
@@ -251,6 +577,9 @@ export default function Display() {
     showTimerFullScreen: false
   });
 
+  // State pelacak status layar penuh (fullscreen) — kursor disembunyikan saat fullscreen aktif
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
   // Animasi FLIP Refs
   const refs = useRef({});
   const positions = useRef({});
@@ -260,35 +589,147 @@ export default function Display() {
   const lastTimerStatusRef = useRef(gameState.timerStatus); // Ref penyimpan status timer sebelumnya
   const lastShowRankingRef = useRef(!!gameState.showRankingFullScreen); // Ref penyimpan status tampilan klasemen layar penuh sebelumnya
 
+  // Refs pelacak mode aktif untuk mendeteksi pergantian mode/ronde
+  const lastActiveRoundIdRef = useRef(gameState.activeRoundId); // Mencatat ID babak aktif terakhir
+  const lastShowTimerFSRef = useRef(!!gameState.showTimerFullScreen); // Mencatat status timer layar penuh terakhir
+  const lastShowRankingFSRef = useRef(!!gameState.showRankingFullScreen); // Mencatat status klasemen layar penuh terakhir
+
   // Efek samping untuk memantau perubahan waktu timer detik demi detik
   useEffect(() => {
-    const prevVal = lastTimerValueRef.current; // Membaca nilai detik detik sebelumnya
-    const prevStatus = lastTimerStatusRef.current; // Membaca status timer sebelumnya
+    // Membaca nilai detik timer sebelumnya dari ref
+    const prevVal = lastTimerValueRef.current;
     
-    lastTimerValueRef.current = gameState.timerValue; // Memperbarui ref dengan nilai detik baru
-    lastTimerStatusRef.current = gameState.timerStatus; // Memperbarui ref dengan status timer baru
+    // Memperbarui ref dengan nilai detik saat ini untuk perbandingan berikutnya
+    lastTimerValueRef.current = gameState.timerValue;
     
-    // Bunyi timer beeps countdown: hanya aktif ketika timer dalam status berjalan dan angkanya berkurang
+    // Bunyi detikan: dipicu jika status timer berjalan ('running') dan nilai detik berkurang
     if (gameState.timerStatus === 'running' && gameState.timerValue < prevVal) {
-      if (gameState.timerValue >= 1 && gameState.timerValue <= 5) {
-        playTimerCountdownSound(false); // Membunyikan suara beep pendek untuk countdown detik 5 ke bawah
-      } else if (gameState.timerValue === 0 && prevVal > 0) {
-        playTimerCountdownSound(true); // Membunyikan suara buzzer panjang saat waktu timer menyentuh 0 (habis)
+      // Jika waktu belum habis (di atas 0), putar suara detik (tick/tock)
+      if (gameState.timerValue > 0) {
+        // Panggil fungsi pemutar suara detik dengan parameter sisa waktu dan waktu maksimal
+        playTickSound(gameState.timerValue, gameState.timerMax);
       }
     }
-  }, [gameState.timerValue, gameState.timerStatus]);
+  }, [gameState.timerValue, gameState.timerStatus, gameState.timerMax]);
 
-  // Efek samping untuk mendeteksi kemunculan overlay papan peringkat / klasemen
+  // Efek samping untuk memantau peralihan mode tampilan atau babak aktif guna memicu suara transisi yang tenang
   useEffect(() => {
-    const prevShow = lastShowRankingRef.current; // Membaca status tampilan klasemen sebelumnya
-    const currentShow = !!gameState.showRankingFullScreen; // Menentukan status tampilan saat ini
-    lastShowRankingRef.current = currentShow; // Memperbarui ref dengan status tampilan baru
-    
-    // Bunyi visualisasi masuk: mainkan sound swell dramatis saat klasemen dipanggil ke layar penuh
-    if (currentShow && !prevShow) {
-      playStandingsWhooshSound(); // Membunyikan musik pad swells sinematik di speaker proyektor
+    // Mengambil data babak aktif sebelumnya dari ref pelacak
+    const prevRoundId = lastActiveRoundIdRef.current;
+    // Mengambil status layar penuh timer sebelumnya dari ref pelacak
+    const prevShowTimerFS = lastShowTimerFSRef.current;
+    // Mengambil status layar penuh klasemen sebelumnya dari ref pelacak
+    const prevShowRankingFS = lastShowRankingFSRef.current;
+
+    // Menentukan ID babak aktif saat ini dari state permainan
+    const currentRoundId = gameState.activeRoundId;
+    // Menentukan status layar penuh timer saat ini dari state permainan
+    const currentShowTimerFS = !!gameState.showTimerFullScreen;
+    // Menentukan status layar penuh klasemen saat ini dari state permainan
+    const currentShowRankingFS = !!gameState.showRankingFullScreen;
+
+    // Membandingkan apakah babak aktif telah bergeser/berubah
+    const roundChanged = prevRoundId !== currentRoundId;
+    // Membandingkan apakah mode layar penuh timer berubah status
+    const timerFSChanged = prevShowTimerFS !== currentShowTimerFS;
+    // Membandingkan apakah mode layar penuh klasemen berubah status
+    const rankingFSChanged = prevShowRankingFS !== currentShowRankingFS;
+
+    // Mengevaluasi jika salah satu dari ketiga komponen mode tampilan tersebut mengalami perubahan
+    if (roundChanged || timerFSChanged || rankingFSChanged) {
+      // Menghindari bentrokan suara jika mode baru yang dituju adalah klasemen (klasemen memutar sound whoosh)
+      if (!currentShowRankingFS) {
+        // Memicu audio transisi ganti mode yang tenang dan lembut (kalem)
+        playModeChangeSound();
+      }
+      // Memperbarui ref pelacak babak aktif dengan nilai babak saat ini
+      lastActiveRoundIdRef.current = currentRoundId;
+      // Memperbarui ref pelacak status timer dengan nilai saat ini
+      lastShowTimerFSRef.current = currentShowTimerFS;
+      // Memperbarui ref pelacak status klasemen dengan nilai saat ini
+      lastShowRankingFSRef.current = currentShowRankingFS;
     }
-  }, [gameState.showRankingFullScreen]);
+  }, [gameState.activeRoundId, gameState.showTimerFullScreen, gameState.showRankingFullScreen]);
+
+  // Efek samping untuk mendeteksi kemunculan overlay papan peringkat / klasemen dan memicu backsound & suara tiang naik satu per satu
+  useEffect(() => {
+    // Membaca status penayangan klasemen sebelumnya dari ref
+    const prevShow = lastShowRankingRef.current;
+    // Menentukan apakah klasemen layar penuh sedang ditampilkan saat ini
+    const currentShow = !!gameState.showRankingFullScreen;
+    // Mengambil kunci animasi klasemen untuk pelacakan klik berulang
+    const animationKey = gameState.rankingAnimationKey;
+    
+    // Memperbarui ref dengan status penayangan terbaru
+    lastShowRankingRef.current = currentShow;
+    
+    // Jika layar klasemen sedang aktif
+    if (currentShow) {
+      // Catatan: Efek suara whoosh/swell pembuka ("ngueengggg") dinonaktifkan sesuai permintaan pengguna agar pembukaan klasemen lebih tenang.
+
+      // Urutkan tim dari skor tertinggi ke terendah untuk keperluan kalkulasi visual podium
+      const rankingTeams = [...teams].sort((a, b) => b.score - a.score);
+      // Deteksi tipe klasemen (jika bukan 'sementara', berarti klasemen akhir/lomba selesai)
+      const isKlasemenAkhir = gameState.rankingTitle?.toLowerCase() !== 'sementara';
+      // Array penampung ID timer timeout untuk pembersihan memory leak
+      const timeouts = [];
+
+      // Loop setiap tim untuk menjadwalkan suara kemunculan podiumnya sesuai delay visual
+      rankingTeams.forEach((team, index) => {
+        // Menentukan peringkat tim (indeks berbasis 1)
+        const rank = index + 1;
+        // Variabel penampung delay dalam satuan detik
+        let delay = 0;
+        
+        // Aturan delay untuk Klasemen Akhir (dramatis dari bawah ke atas)
+        if (isKlasemenAkhir) {
+          if (rank === 1) {
+            delay = 8.5; // Juara 1 muncul paling terakhir (+3.0s setelah Juara 2)
+          } else if (rank === 2) {
+            delay = 5.5; // Juara 2 muncul perlahan setelah Juara 3 (+2.0s)
+          } else if (rank === 3) {
+            delay = 3.5; // Juara 3 muncul setelah barisan bawah (+1.5s)
+          } else {
+            delay = Math.max(0, (rankingTeams.length - rank) * 1.0); // Urutan cepat untuk peringkat bawah
+          }
+        } 
+        // Aturan delay untuk Klasemen Sementara (muncul cepat bertahap dari bawah)
+        else {
+          delay = (rankingTeams.length - rank) * 1.0;
+        }
+
+        // Menentukan tambahan waktu jeda pemutaran suara agar sinkron dengan gerakan melonjak cepat (shoot up)
+        let soundDelayOffset = 0;
+        // Jika klasemen akhir dan peringkat 2 atau 3, tunda suara arpeggio hingga nama tim terlihat dan meluncur penuh (1.85 detik)
+        if (isKlasemenAkhir && (rank === 2 || rank === 3)) {
+          // Menetapkan delay offset suara sebanyak 1.85 detik agar sinkron dengan lonjakan cepat 75% durasi 2.5s
+          soundDelayOffset = 1.85;
+        }
+
+        // Daftarkan callback pemutar suara naik untuk tiang ke-n setelah delay terlewati
+        const timerId = setTimeout(() => {
+          // Putar suara naik podium sesuai peringkatnya (agung untuk juara 1, impact untuk lainnya)
+          playPodiumRiseSound(rank);
+        }, (delay + soundDelayOffset) * 1000);
+        
+        // Simpan referensi timer ke array
+        timeouts.push(timerId);
+      });
+
+      // Kembalikan fungsi cleanup untuk membatalkan semua timeout jika komponen di-unmount atau state berubah
+      return () => {
+        // Hapus setiap timeout yang terdaftar
+        timeouts.forEach(clearTimeout);
+        // Hentikan pemutaran audio Juara 1 jika sedang aktif
+        if (activeWinnerAudio) {
+          // Menghentikan (pause) pemutaran audio
+          activeWinnerAudio.pause();
+          // Menyetel ulang referensi audio ke null
+          activeWinnerAudio = null;
+        }
+      };
+    }
+  }, [gameState.showRankingFullScreen, gameState.rankingAnimationKey, teams]);
 
   useLayoutEffect(() => {
     teams.forEach((t) => {
@@ -322,13 +763,25 @@ export default function Display() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [tmRes, rdRes] = await Promise.all([
+        // Melakukan request paralel untuk mengambil tim, babak, dan state game awal dari server
+        const [tmRes, rdRes, gsRes] = await Promise.all([
+          // Mengambil daftar tim
           fetch('http://localhost:5000/api/teams'),
-          fetch('http://localhost:5000/api/rounds')
+          // Mengambil konfigurasi babak
+          fetch('http://localhost:5000/api/rounds'),
+          // Mengambil state permainan saat ini
+          fetch('http://localhost:5000/api/game-state')
         ]);
+        // Memperbarui state daftar tim
         setTeams(await tmRes.json());
+        // Memperbarui state daftar babak
         setRounds(await rdRes.json());
+        // Membaca data state game dari response JSON
+        const initialGameState = await gsRes.json();
+        // Menetapkan state game awal agar sinkron pasca-reload halaman
+        setGameState(initialGameState);
       } catch (e) {
+        // Mencatat kegagalan pengambilan data awal ke konsol
         console.error('Fetch error:', e);
       }
     };
@@ -345,18 +798,23 @@ export default function Display() {
     });
 
     socket.on('timer-tick', (v) => setGameState(p => ({ ...p, timerValue: v })));
+    socket.on('timer-finished', () => {
+      // Memutar alarm buzzer panjang saat menerima sinyal waktu habis dari server
+      playAlarmSound();
+    });
     socket.on('teams-updated', (t) => setTeams(t));
     socket.on('buzzer-ready', () => { setBuzzerWinner(null); setShowBuzzerOverlay(false); });
     socket.on('buzzer-triggered', (name) => {
       setBuzzerWinner(name);
       setShowBuzzerOverlay(true);
       try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        // Menggunakan AudioContext global tunggal agar konsisten dan terhindar dari limitasi browser
+        const ctx = getAudioContext();
         const osc = ctx.createOscillator();
         const g = ctx.createGain();
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(480, ctx.currentTime);
-        g.gain.setValueAtTime(0.25, ctx.currentTime);
+        g.gain.setValueAtTime(0.35, ctx.currentTime); // Dinaikkan volumenya agar lebih jelas terdengar
         osc.connect(g);
         g.connect(ctx.destination);
         osc.start();
@@ -364,7 +822,7 @@ export default function Display() {
       } catch (e) {}
     });
 
-    return () => ['game-state','timer-tick','teams-updated','buzzer-ready','buzzer-triggered'].forEach(e => socket.off(e));
+    return () => ['game-state','timer-tick','teams-updated','buzzer-ready','buzzer-triggered','timer-finished'].forEach(e => socket.off(e));
   }, []);
 
   useEffect(() => {
@@ -382,6 +840,18 @@ export default function Display() {
     const handler = (e) => { if (e.key === 'f' || e.key === 'F') toggleFullscreen(); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Efek samping untuk mendeteksi perubahan status fullscreen dari browser
+  useEffect(() => {
+    // Handler yang dipanggil setiap kali status fullscreen berubah (masuk/keluar)
+    const onFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement); // true jika ada elemen fullscreen, false jika tidak
+    };
+    // Mendaftarkan event listener pada document untuk semua prefix browser
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    // Membersihkan listener saat komponen di-unmount
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
   }, []);
 
   // Fungsi pembantu untuk mengambil skor tim di babak aktif
@@ -419,7 +889,8 @@ export default function Display() {
       minHeight: '100vh', width: '100%', display: 'flex', flexDirection: 'column',
       padding: 'clamp(2rem, 4vh, 4rem) clamp(3rem, 5vw, 6rem)',
       color: '#ffffff', fontFamily: "'Outfit', sans-serif", overflow: 'hidden',
-      position: 'relative', userSelect: 'none', cursor: 'none',
+      position: 'relative', userSelect: 'none',
+      cursor: isFullscreen ? 'none' : 'default', // Kursor disembunyikan saat fullscreen, ditampilkan saat windowed
       border: '0.2rem solid #2b3b6a', // Border luar mirip screenshot
       boxSizing: 'border-box'
     }}>
@@ -440,9 +911,7 @@ export default function Display() {
         }
         @keyframes heartbeatDanger {
           0% { transform: scale(1); color: #f43f5e; text-shadow: 0 0 5rem rgba(244,63,94,0.5); }
-          15% { transform: scale(1.1); color: #ff0000; text-shadow: 0 0 15rem rgba(255,0,0,1); }
-          30% { transform: scale(1); color: #f43f5e; text-shadow: 0 0 5rem rgba(244,63,94,0.5); }
-          45% { transform: scale(1.1); color: #ff0000; text-shadow: 0 0 15rem rgba(255,0,0,1); }
+          30% { transform: scale(1.15); color: #ff0000; text-shadow: 0 0 15rem rgba(255,0,0,1); }
           100% { transform: scale(1); color: #f43f5e; text-shadow: 0 0 5rem rgba(244,63,94,0.5); }
         }
         .score-increase {
@@ -475,73 +944,48 @@ export default function Display() {
 
         {/* HEADER: PIL SHAPED BANNER */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2.5rem' }}>
-          <div style={{
-            background: 'rgba(255,255,255,0.03)',
-            border: '0.1rem solid rgba(255,255,255,0.05)',
-            borderRadius: '10rem',
-            padding: '1rem 3rem',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '2rem',
-            boxShadow: '0 0.5rem 2rem rgba(0,0,0,0.2)'
-          }}>
+          {/* Kontainer banner dengan class CSS eksternal responsif */}
+          <div className="display-banner">
+            {/* Judul Acara Lomba */}
             <span style={{ fontSize: 'clamp(2rem, 2.5vw, 3rem)', fontWeight: 900, color: '#c7d2fe', textTransform: 'uppercase', letterSpacing: '0.05em', textShadow: '0 0.2rem 0.5rem rgba(0,0,0,0.5)' }}>
-              HUT RI KE-81
+              LOMBA CERDAS CERMAT
             </span>
-            <div style={{ width: '0.3rem', height: '3rem', background: 'rgba(255,255,255,0.3)' }} />
+            {/* Garis pemisah responsif */}
+            <div className="display-banner-divider" />
+            {/* Nama babak aktif */}
             <span style={{ fontSize: 'clamp(1.8rem, 2vw, 2.5rem)', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.15em', textShadow: '0 0.2rem 0.5rem rgba(0,0,0,0.5)' }}>
               {activeRound ? activeRound.name : 'Persiapan'}
             </span>
           </div>
         </div>
 
-
-
-        {/* SCORE GRID (FLAT) */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '4rem',
-          flexGrow: 1,
-          alignContent: 'center',
-          maxWidth: '100%',
-          margin: '0 auto',
-          width: '100%',
-          paddingBottom: '8rem'
-        }}>
+        {/* SCORE GRID (FLAT) - Menggunakan class responsif eksternal */}
+        <div className="display-score-grid">
           {sortedTeams.map((team, idx) => {
-            const isBuzzerActive = buzzerWinner === team.name;
-            const teamColor = team.color || '#6366f1';
-            const roundScore = getActiveRoundScore(team);
-            const displayScore = gameState.revealScores ? roundScore.toLocaleString() : '---';
+            const isBuzzerActive = buzzerWinner === team.name; // Status apakah bel ditekan oleh tim ini
+            const teamColor = team.color || '#6366f1'; // Warna tim bawaan (default) jika tidak ditentukan
+            const roundScore = getActiveRoundScore(team); // Nilai skor tim di babak aktif saat ini
+            const displayScore = gameState.revealScores ? roundScore.toLocaleString() : '---'; // Menentukan apakah skor diungkap atau ditutup
 
             return (
               <div 
-                key={team.id} 
-                ref={el => refs.current[team.id] = el}
+                key={team.id} // Kunci unik komponen anak React untuk pelacakan render
+                ref={el => refs.current[team.id] = el} // Referensi DOM kartu skor untuk pemicuan animasi
+                className="display-score-card" // Menggunakan class CSS eksternal responsif
                 style={{
-                  background: 'linear-gradient(145deg, rgba(34, 43, 69, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%)',
-                  borderRadius: '2.5rem',
-                  padding: '5rem 6rem',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  minHeight: '34rem',
+                  // Gaya dinamis berbasis status buzzer aktif/tidak aktif
                   boxShadow: isBuzzerActive 
                     ? `0 0 8rem ${hexToRgba(teamColor, 0.8)}, inset 0 0 4rem ${hexToRgba(teamColor, 0.5)}` 
                     : `0 2.5rem 5rem rgba(0,0,0,0.6), inset 0 0.2rem 0.2rem rgba(255,255,255,0.15), inset 0 -1rem 3rem rgba(0,0,0,0.5), 0 0 4rem ${hexToRgba(teamColor, 0.15)}`,
-                  transform: isBuzzerActive ? 'scale(1.05)' : 'translateY(-0.5rem)',
-                  transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.4s ease',
-                  border: `0.2rem solid ${isBuzzerActive ? teamColor : hexToRgba(teamColor, 0.25)}`
+                  transform: isBuzzerActive ? 'scale(1.05)' : 'translateY(-0.5rem)', // Skala membesar jika bel dipicu
+                  border: `0.2rem solid ${isBuzzerActive ? teamColor : hexToRgba(teamColor, 0.25)}` // Border tebal berwarna tim jika buzzer menyala
                 }}
               >
 
                 {/* Header Kartu: Nama Tim */}
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', textAlign: 'center', marginBottom: 'auto' }}>
                   <div>
+                    {/* Teks nama tim berskala fluid */}
                     <div style={{ 
                       fontSize: 'clamp(3rem, 4vw, 4.5rem)', 
                       fontWeight: 900, 
@@ -557,7 +1001,7 @@ export default function Display() {
                 </div>
 
                 {/* Nilai Skor Raksasa Dinamis */}
-                <AnimatedScore rawScore={roundScore} displayScore={displayScore} teamColor={teamColor} />
+                <AnimatedScore rawScore={roundScore} displayScore={displayScore} teamColor={teamColor} activeRoundId={gameState.activeRoundId} />
 
               </div>
             );
@@ -577,8 +1021,13 @@ export default function Display() {
       }}>
         {(() => {
           const activeTKTeam = teams.find(t => t.id === gameState.tebakKataActiveTeamId);
-          const isDanger = gameState.timerValue > 0 && gameState.timerValue <= 5;
+          // Hitung ambang batas bahaya secara dinamis berdasarkan nilai durasi maksimum timer
+          const dangerThreshold = getDangerThreshold(gameState.timerMax || 30);
+          // Cek apakah nilai timer berada di zona kritis (bahaya)
+          const isDanger = gameState.timerValue > 0 && gameState.timerValue <= dangerThreshold;
+          // Setel warna teks merah jika kritis, putih jika normal
           const timerColor = isDanger ? '#f43f5e' : '#ffffff';
+          // Setel warna bayangan glow lebih terang jika kritis
           const shadowColor = activeTKTeam ? hexToRgba(activeTKTeam.color, isDanger ? 0.9 : 0.6) : 'rgba(99,102,241,0.6)';
 
           return (
@@ -609,42 +1058,30 @@ export default function Display() {
                 {formatTimer(gameState.timerValue)}
               </div>
 
-              {/* Mini Scoreboard Cards di Bawah Timer */}
-              <div style={{
-                position: 'absolute',
-                bottom: '4rem',
-                left: '0',
-                right: '0',
-                display: 'flex',
-                justifyContent: 'center',
-                gap: '2rem',
-                padding: '0 4rem',
-                width: '100%'
-              }}>
+              {/* Mini Scoreboard Cards di Bawah Timer - Menggunakan class responsif eksternal */}
+              <div className="display-mini-cards">
                 {sortedTeams.map((team) => {
-                  const roundScore = getActiveRoundScore(team);
-                  const isActive = activeTKTeam && activeTKTeam.id === team.id;
+                  const roundScore = getActiveRoundScore(team); // Nilai skor tim di babak aktif saat ini
+                  const isActive = activeTKTeam && activeTKTeam.id === team.id; // Menandai jika tim aktif menjawab
                   
                   return (
-                    <div key={team.id} style={{
-                      flex: 1,
-                      maxWidth: '22rem',
-                      background: isActive 
-                        ? `linear-gradient(145deg, ${hexToRgba(team.color, 0.3)} 0%, ${hexToRgba(team.color, 0.1)} 100%)`
-                        : `linear-gradient(145deg, rgba(34, 43, 69, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)`,
-                      border: `0.2rem solid ${isActive ? team.color : hexToRgba(team.color, 0.3)}`,
-                      borderTop: `0.6rem solid ${team.color}`,
-                      borderRadius: '1.5rem',
-                      padding: '1.5rem 1rem',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      boxShadow: isActive 
-                        ? `0 0 3rem ${hexToRgba(team.color, 0.4)}, inset 0 0 2rem ${hexToRgba(team.color, 0.2)}`
-                        : `0 1rem 2rem rgba(0,0,0,0.5)`,
-                      transform: isActive ? 'translateY(-1rem) scale(1.05)' : 'translateY(0) scale(1)',
-                      transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
-                    }}>
+                    <div 
+                      key={team.id} // Kunci unik komponen anak React
+                      className="display-mini-card" // Menggunakan class CSS eksternal responsif
+                      style={{
+                        // Gaya visual dinamis berdasarkan status keaktifan tim saat ini
+                        background: isActive 
+                          ? `linear-gradient(145deg, ${hexToRgba(team.color, 0.3)} 0%, ${hexToRgba(team.color, 0.1)} 100%)`
+                          : `linear-gradient(145deg, rgba(34, 43, 69, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)`,
+                        border: `0.2rem solid ${isActive ? team.color : hexToRgba(team.color, 0.3)}`, // Border menyala jika aktif
+                        borderTop: `0.6rem solid ${team.color}`, // Aksen warna tim di tepi atas kartu
+                        boxShadow: isActive 
+                          ? `0 0 3rem ${hexToRgba(team.color, 0.4)}, inset 0 0 2rem ${hexToRgba(team.color, 0.2)}`
+                          : `0 1rem 2rem rgba(0,0,0,0.5)`, // Pendaran glow jika tim aktif menjawab
+                        transform: isActive ? 'translateY(-1rem) scale(1.05)' : 'translateY(0) scale(1)', // Sedikit mengangkat kartu tim yang aktif
+                        transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' // Efek transisi halus
+                      }}
+                    >
                       <span style={{ 
                         fontSize: '1.8rem', fontWeight: 800, color: '#ffffff', 
                         textTransform: 'uppercase', letterSpacing: '0.05em', 
@@ -681,6 +1118,45 @@ export default function Display() {
             65% { transform: translateY(-2.5rem) scale(1.03); opacity: 1; filter: blur(0) brightness(1.5); }
             85% { transform: translateY(1rem) scale(0.98); filter: brightness(1.1); }
             100% { transform: translateY(0) scale(1); opacity: 1; filter: brightness(1); }
+          }
+          /* Animasi naik dramatis untuk peringkat 3, 2, 1: dari bawah pelan, lalu meluncur cepat setelah nama tim terlihat */
+          @keyframes dramaticRiseTop {
+            0% { 
+              /* Memulai dari posisi di bawah layar sepenuhnya */
+              transform: translateY(105%) scale(0.95); 
+              /* Awal transparan */
+              opacity: 0; 
+              /* Sedikit efek blur */
+              filter: blur(0.8rem); 
+              /* Easing halus untuk perayapan awal */
+              animation-timing-function: cubic-bezier(0.25, 0.1, 0.25, 1); 
+            }
+            75% { 
+              /* Naik lambat hingga nama tim dan tulisan juara terlihat jelas */
+              transform: translateY(45%) scale(0.97); 
+              /* Menjadi solid penuh */
+              opacity: 1; 
+              /* Menghapus blur */
+              filter: blur(0); 
+              /* Easing meletup cepat (snap overshoot) */
+              animation-timing-function: cubic-bezier(0.3, 1.5, 0.5, 1); 
+            }
+            88% { 
+              /* Melonjak overshoot ke atas melebihi tinggi normal */
+              transform: translateY(-3%) scale(1.02); 
+              /* Efek kilauan kecerahan puncak */
+              filter: brightness(1.15); 
+              /* Easing pelan saat kembali mendarat */
+              animation-timing-function: ease-out; 
+            }
+            100% { 
+              /* Mendarat sempurna di posisi nol */
+              transform: translateY(0) scale(1); 
+              /* Tetap solid */
+              opacity: 1; 
+              /* Normal kecerahan */
+              filter: brightness(1); 
+            }
           }
           /* Animasi denyut cahaya emas mewah (luxury gold) di sekeliling podium juara pertama */
           @keyframes championGlow {
@@ -789,40 +1265,27 @@ export default function Display() {
                   KLASEMEN <span style={{ color: '#fbbf24', textShadow: '0 0 3rem rgba(251,191,36,0.6)' }}>{gameState.rankingTitle || 'AKHIR'}</span>
                 </h1>
                 
-                {/* Kontainer Barisan Podium */}
-                <div style={{ 
-                  display: 'flex', // Menyejajarkan barisan podium secara horizontal
-                  justifyContent: 'center', // Memusatkan deretan podium di tengah layar
-                  alignItems: 'flex-end', // Meratakan ujung bawah podium agar menempel sempurna di dasar layar
-                  gap: '1.8rem', // Memberikan celah renggang antar barisan podium sebesar 1.8rem
-                  width: '100%', // Lebar kontainer penuh
-                  maxWidth: '160rem', // Batas lebar maksimal kontainer agar tidak melar di layar ultra-lebar
-                  height: '75vh', // Menggunakan 75% dari tinggi viewport agar menyisakan ruang bagi judul di atas
-                  zIndex: 2 // Di atas sorotan panggung utama
-                }}>
+                {/* Kontainer Barisan Podium - Menggunakan class responsif eksternal */}
+                <div className="display-podium-container">
                   {podiumOrder.map(({ team, rank }, index) => {
                     const isWinner = rank === 1; // Menandai jika tim menempati peringkat pertama
+                    const isKlasemenAkhir = gameState.rankingTitle?.toLowerCase() !== 'sementara'; // Menentukan tipe klasemen
                     
-                    // Menentukan apakah visualisasi saat ini adalah Klasemen Akhir (bukan Klasemen Sementara)
-                    const isKlasemenAkhir = gameState.rankingTitle?.toLowerCase() !== 'sementara';
-                    
-                    // Jeda animasi masuk: peringkat bawah naik lebih dulu, podium juara 3, 2, 1 dibuat berjarak dramatis khusus di Klasemen Akhir
+                    // Mengatur jeda (delay) kemunculan podium secara dramatis
                     let delay = 0; // Menginisialisasi variabel delay bernilai 0
                     if (isKlasemenAkhir) {
-                      // Logika khusus Klasemen Akhir: peringkat 3, 2, dan 1 masuk secara perlahan satu per satu
+                      // Penundaan berjenjang khusus klasemen akhir
                       if (rank === 1) {
-                        delay = 8.5; // Juara 1 muncul paling akhir secara megah (+3.0s setelah Juara 2)
+                        delay = 8.5; // Juara 1 muncul paling akhir (+3.0s setelah Juara 2)
                       } else if (rank === 2) {
                         delay = 5.5; // Juara 2 muncul perlahan setelah Juara 3 (+2.0s)
                       } else if (rank === 3) {
                         delay = 3.5; // Juara 3 muncul setelah barisan bawah (+1.5s)
                       } else {
-                        // Peringkat bawah (4, 5, 6) muncul secara berurutan cepat dengan jeda 1 detik
-                        delay = Math.max(0, (rankingTeams.length - rank) * 1.0);
+                        delay = Math.max(0, (rankingTeams.length - rank) * 1.0); // Urutan cepat untuk peringkat bawah
                       }
                     } else {
-                      // Logika Klasemen Sementara: visualisasi masuk secara cepat dan konstan (jeda 1.0 detik) agar efisien
-                      delay = (rankingTeams.length - rank) * 1.0;
+                      delay = (rankingTeams.length - rank) * 1.0; // Urutan cepat konstan untuk klasemen sementara
                     } 
                     
                     // Skala tinggi dinamis barisan podium
@@ -830,19 +1293,29 @@ export default function Display() {
                     const heightPercent = heightPercentages[rank - 1] || 25; // Mengambil data tinggi atau default ke 25%
 
                     return (
-                      // Kontainer Utama Kartu Tim Peringkat
-                      <div key={team.id} style={{
-                        flex: isWinner ? 1.5 : 1, // Juara 1 dibuat lebih lebar sebesar 1.5 kali lipat dari yang lain
-                        display: 'flex', // Menyusun elemen mahkota dan baris podium secara kolom
-                        flexDirection: 'column', // Mengatur flexbox secara vertikal
-                        alignItems: 'center', // Menyejajarkan elemen anak (mahkota, bar podium) tepat di tengah kolom
-                        height: `${heightPercent}%`, // Menyesuaikan tinggi sesuai persentase peringkatnya
-                        opacity: 0, // Awal tidak terlihat sebelum animasi naik dimulai
-                        animation: 'dramaticRise 1.3s cubic-bezier(0.25, 1, 0.5, 1) forwards', // Menerapkan efek masuk elastis
-                        animationDelay: `${delay}s`, // Menerapkan delay berjenjang untuk memunculkan satu per satu
-                        zIndex: isWinner ? 10 : 5, // Pemenang utama ditaruh di tumpukan terdepan agar menutupi yang lain jika bersentuhan
-                        position: 'relative' // Menyediakan ruang koordinat lokal bagi elemen absolut di dalamnya
-                      }}>
+                      // Kontainer Utama Kartu Tim Peringkat dengan class CSS eksternal responsif
+                      <div 
+                        // Kunci unik komponen anak React untuk memfasilitasi rerender yang efisien
+                        key={team.id} 
+                        // Menggunakan class CSS eksternal responsif untuk tata letak kolom podium
+                        className="display-podium-item" 
+                        style={{
+                          // Juara 1 (pemenang utama) dibuat 1.5x lebih lebar daripada juara lainnya agar tampak menonjol
+                          flex: isWinner ? 1.5 : 1, 
+                          // Tinggi tiang podium diatur berdasarkan persentase (Juara 1 paling tinggi, dst)
+                          height: `${heightPercent}%`, 
+                          // Menerapkan tampang animasi dramaticRiseTop (naik lambat lalu meluncur cepat) untuk juara 1, 2, 3 di klasemen akhir, lainnya standar
+                          animation: (isKlasemenAkhir && rank <= 3)
+                            ? 'dramaticRiseTop 2.5s linear forwards'
+                            : 'dramaticRise 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards',
+                          // Awalnya disembunyikan agar efek fade-in dari animasi tidak bocor sebelum delay selesai
+                          opacity: 0,
+                          // Delay animasi dinamis (Juara 3 -> Juara 2 -> Juara 1 paling akhir agar dramatis)
+                          animationDelay: `${delay}s`, 
+                          // Menempatkan Juara 1 di tumpukan z-index teratas agar tidak terpotong tiang di sampingnya
+                          zIndex: isWinner ? 10 : 5 
+                        }}
+                      >
                         
                         {/* Sorotan cahaya belakang berwarna tim untuk efek panggung */}
                         <div style={{

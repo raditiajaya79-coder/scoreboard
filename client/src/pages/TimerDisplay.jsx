@@ -37,44 +37,132 @@ const BrandingLogo = () => {
 // LOGIKA AUDIO WEB AUDIO API (SYNTHESIZER TIMER)
 // ==========================================
 
-// Fungsi pembantu untuk memicu bunyi beeps countdown timer (detik 5 kebawah & buzzer waktu habis)
-const playTimerCountdownSound = (isTimeout) => {
+// Konteks audio global tunggal yang digunakan kembali untuk mencegah batas maksimal AudioContext browser terlampaui
+let globalAudioCtx = null;
+
+/**
+ * Fungsi: getAudioContext
+ * Deskripsi: Mengembalikan satu-satunya instance AudioContext yang aktif (singleton).
+ *            Mengaktifkan kembali (resume) jika ditangguhkan oleh browser.
+ */
+const getAudioContext = () => {
+  // Jika konteks audio belum dibuat, inisialisasi baru
+  if (!globalAudioCtx) {
+    globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  // Aktifkan kembali konteks audio jika dalam keadaan tersuspensi (kebijakan autoplay browser)
+  if (globalAudioCtx.state === 'suspended') {
+    globalAudioCtx.resume();
+  }
+  // Mengembalikan instance konteks audio
+  return globalAudioCtx;
+};
+
+// Fungsi pembantu global untuk mendapatkan ambang batas waktu kritis (danger threshold) secara dinamis
+const getDangerThreshold = (maxVal) => {
+  // Jika durasi maksimal 60 detik atau lebih (misal 60s, 90s, dst), ambang kritisnya adalah 10 detik terakhir
+  if (maxVal >= 60) return 10;
+  // Jika durasi maksimal di atas 30 detik tetapi di bawah 60, ambang kritisnya adalah 8 detik terakhir
+  if (maxVal >= 30) return 8;
+  // Jika durasi maksimal di atas 15 detik tetapi di bawah 30, ambang kritisnya adalah 5 detik terakhir
+  if (maxVal >= 15) return 5;
+  // Untuk waktu yang sangat pendek (di bawah 15 detik), ambang kritisnya adalah 3 detik terakhir
+  return 3;
+};
+
+/**
+ * Fungsi: playTickSound
+ * Deskripsi: Memicu suara ketukan detik (tick/tock) dengan volume yang ditingkatkan agar terdengar kencang di seluruh ruangan.
+ */
+const playTickSound = (secondsLeft, maxVal) => {
   try {
-    // Membuat instance AudioContext baru
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const now = ctx.currentTime; // Mengambil waktu sekarang dari sistem audio
+    // Mendapatkan konteks audio tunggal
+    const ctx = getAudioContext();
+    // Mendapatkan waktu sekarang
+    const now = ctx.currentTime;
+    // Membuat oscillator generator gelombang suara
+    const osc = ctx.createOscillator();
+    // Membuat gain node pengatur volume
+    const g = ctx.createGain();
     
-    const osc = ctx.createOscillator(); // Membuat unit oscillator
-    const gainNode = ctx.createGain(); // Membuat pengatur amplitudo gain
+    // Menghubungkan oscillator ke gain, dan gain ke speaker
+    osc.connect(g);
+    g.connect(ctx.destination);
     
-    if (isTimeout) {
-      // Buzzer waktu habis: nada rendah gergaji yang kuat selama 0.7 detik
-      osc.type = 'sawtooth'; // Mengatur oscillator bertipe gergaji (sawtooth) agar berdengung tajam
-      osc.frequency.setValueAtTime(180, now); // Mulai dari frekuensi 180Hz
-      osc.frequency.linearRampToValueAtTime(150, now + 0.7); // Frekuensi turun sedikit di akhir
-      
-      gainNode.gain.setValueAtTime(0.25, now); // Volume awal buzzer waktu habis
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.7); // Meluruhkan suara sampai sunyi
-      
-      osc.connect(gainNode); // Menghubungkan osc ke volume
-      gainNode.connect(ctx.destination); // Menghubungkan volume ke sound output speaker
-      osc.start(now); // Memulai bunyi
-      osc.stop(now + 0.75); // Menghentikan oscillator
+    // Mendapatkan batas waktu kritis secara dinamis berdasarkan durasi maksimal
+    const threshold = getDangerThreshold(maxVal || 30);
+    
+    // Memeriksa apakah sisa waktu berada di bawah atau sama dengan ambang kritis
+    if (secondsLeft <= threshold) {
+      // Beep peringatan kritis: gelombang sinus tinggi nyaring 850Hz, volume ditingkatkan sangat keras (0.90)
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(850, now);
+      g.gain.setValueAtTime(0.90, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      osc.start(now);
+      osc.stop(now + 0.15);
     } else {
-      // Countdown detik 5 ke bawah: beep tinggi pendek 800Hz selama 0.08 detik
-      osc.type = 'sine'; // Menggunakan gelombang sinus murni untuk beep
-      osc.frequency.setValueAtTime(800, now); // Detak beep tinggi di frekuensi 800Hz
-      
-      gainNode.gain.setValueAtTime(0.18, now); // Volume detak beep relatif kecil
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.08); // Meluruh cepat dalam 0.08 detik
-      
-      osc.connect(gainNode); // Hubungkan oscillator ke gain
-      gainNode.connect(ctx.destination); // Hubungkan gain ke sound output speaker
-      osc.start(now); // Mulai oscillator
-      osc.stop(now + 0.1); // Hentikan oscillator
+      // Detik biasa: gelombang segitiga woodblock hangat 400Hz, volume ditingkatkan keras (0.60)
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(400, now);
+      g.gain.setValueAtTime(0.60, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      osc.start(now);
+      osc.stop(now + 0.08);
     }
-  } catch (e) {
-    console.error('Gagal memainkan audio timer:', e);
+  } catch (error) {
+    // Log kegagalan suara detikan
+    console.error('Gagal memutar detikan:', error);
+  }
+};
+
+/**
+ * Fungsi: playAlarmSound
+ * Deskripsi: Memicu suara bel alarm/buzzer selesai dengan volume yang ditingkatkan sangat keras (0.85).
+ */
+const playAlarmSound = () => {
+  try {
+    // Mendapatkan konteks audio tunggal
+    const ctx = getAudioContext();
+    // Mendapatkan stempel waktu saat ini
+    const now = ctx.currentTime;
+    // Membuat dua osilator untuk efek suara alarm mendengung kencang
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    // Membuat gain node pengatur volume
+    const g = ctx.createGain();
+    
+    // Menyetel osilator pertama ke gelombang gergaji (sawtooth) frekuensi 180Hz
+    osc1.type = 'sawtooth';
+    osc1.frequency.setValueAtTime(180, now);
+    
+    // Menyetel osilator kedua ke gelombang kotak (square) frekuensi 185Hz
+    osc2.type = 'square';
+    osc2.frequency.setValueAtTime(185, now);
+    
+    // Menghubungkan kedua osilator ke gain node
+    osc1.connect(g);
+    osc2.connect(g);
+    // Menghubungkan gain node ke speaker
+    g.connect(ctx.destination);
+    
+    // Menyetel volume puncak alarm ke tingkat sangat keras (0.85)
+    g.gain.setValueAtTime(0.85, now);
+    // Mempertahankan volume kencang selama 800ms
+    g.gain.linearRampToValueAtTime(0.85, now + 0.8);
+    // Meluruhkan volume secara eksponensial ke sunyi hingga detik ke-1.2
+    g.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+    
+    // Menjalankan alarm secara serentak
+    osc1.start(now);
+    osc2.start(now);
+    
+    // Menghentikan alarm setelah 1.2 detik
+    osc1.stop(now + 1.2);
+    osc2.stop(now + 1.2);
+  } catch (error) {
+    // Log kegagalan alarm habis
+    console.error('Gagal memutar alarm selesai:', error);
   }
 };
 
@@ -100,23 +188,26 @@ export default function TimerDisplay() {
   const lastTimerValueRef = useRef(gameState.timerValue); // Ref penyimpan nilai detik timer sebelumnya
   const lastTimerStatusRef = useRef(gameState.timerStatus); // Ref penyimpan status timer sebelumnya
 
+  // Ambang batas kritis dinamis berdasarkan durasi maksimal timer saat ini
+  const dangerThreshold = getDangerThreshold(gameState.timerMax || 30);
+
   // Efek samping untuk memantau perubahan waktu timer detik demi detik
   useEffect(() => {
-    const prevVal = lastTimerValueRef.current; // Membaca nilai detik detik sebelumnya
-    const prevStatus = lastTimerStatusRef.current; // Membaca status timer sebelumnya
+    // Membaca nilai detik timer sebelumnya dari ref
+    const prevVal = lastTimerValueRef.current;
     
-    lastTimerValueRef.current = gameState.timerValue; // Memperbarui ref dengan nilai detik baru
-    lastTimerStatusRef.current = gameState.timerStatus; // Memperbarui ref dengan status timer baru
+    // Memperbarui ref dengan nilai detik saat ini untuk perbandingan berikutnya
+    lastTimerValueRef.current = gameState.timerValue;
     
-    // Bunyi timer beeps countdown: hanya aktif ketika timer dalam status berjalan dan angkanya berkurang
+    // Bunyi detikan: dipicu jika status timer berjalan ('running') dan nilai detik berkurang
     if (gameState.timerStatus === 'running' && gameState.timerValue < prevVal) {
-      if (gameState.timerValue >= 1 && gameState.timerValue <= 5) {
-        playTimerCountdownSound(false); // Membunyikan suara beep pendek untuk countdown detik 5 ke bawah
-      } else if (gameState.timerValue === 0 && prevVal > 0) {
-        playTimerCountdownSound(true); // Membunyikan suara buzzer panjang saat waktu timer menyentuh 0 (habis)
+      // Jika sisa waktu di atas 0, putar suara detik (tick/tock)
+      if (gameState.timerValue > 0) {
+        // Panggil fungsi pemutar suara detik
+        playTickSound(gameState.timerValue, gameState.timerMax);
       }
     }
-  }, [gameState.timerValue, gameState.timerStatus]);
+  }, [gameState.timerValue, gameState.timerStatus, gameState.timerMax]);
 
   // === EFFECTS & SOCKETS ===
   useEffect(() => {
@@ -134,9 +225,17 @@ export default function TimerDisplay() {
     // Daftarkan listener Socket IO
     socket.on('game-state', (s) => setGameState(s));
     socket.on('timer-tick', (v) => setGameState(p => ({ ...p, timerValue: v })));
+    socket.on('timer-finished', () => {
+      // Memutar suara alarm buzzer selesai
+      playAlarmSound();
+    });
     
     // Bersihkan listener saat unmount
-    return () => { socket.off('game-state'); socket.off('timer-tick'); };
+    return () => { 
+      socket.off('game-state'); 
+      socket.off('timer-tick'); 
+      socket.off('timer-finished');
+    };
   }, []);
 
   // Hitung persentase durasi timer berjalan
@@ -144,8 +243,12 @@ export default function TimerDisplay() {
   const circumference = 2 * Math.PI * 45; // radius 45 ring SVG
   const strokeDash = (timerPercent / 100) * circumference;
   
-  // Perubahan warna dinamis timer (Hijau -> Amber -> Rose)
-  const timerColor = gameState.timerValue <= 5 ? '#f43f5e' : gameState.timerValue <= 10 ? '#f59e0b' : '#10b981';
+  // Perubahan warna dinamis timer (Merah jika kritis, kuning jika mendekati kritis, hijau jika normal)
+  const timerColor = gameState.timerValue <= dangerThreshold 
+    ? '#f43f5e' 
+    : gameState.timerValue <= dangerThreshold * 2 
+      ? '#f59e0b' 
+      : '#10b981';
 
   /** Toggle mode layar penuh via Fullscreen API */
   const toggleFullscreen = () => {

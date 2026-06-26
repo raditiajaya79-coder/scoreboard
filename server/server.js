@@ -2,6 +2,8 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import {
   initializeDatabase,
   queryAll,
@@ -28,6 +30,12 @@ app.use(express.json());
 
 // Middleware untuk mengaktifkan CORS (Cross-Origin Resource Sharing)
 app.use(cors());
+
+// Mendapatkan nama direktori saat ini dalam lingkup ES Module
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Menyediakan akses folder sound secara statis agar MP3 Juara 1 dapat dimuat via HTTP
+app.use('/sound', express.static(path.join(__dirname, '../sound')));
 
 // Inisialisasi database SQLite dan membuat tabel/data awal jika belum ada
 initializeDatabase();
@@ -317,16 +325,36 @@ app.delete('/api/rounds/:id', async (req, res) => {
 });
 
 /**
+ * Endpoint: GET /api/game-state
+ * Tujuan: Mengambil state game saat ini untuk sinkronisasi awal saat klien memuat ulang halaman.
+ */
+app.get('/api/game-state', (req, res) => {
+  // Mengirimkan objek gameState saat ini ke client
+  res.json(gameState);
+});
+
+/**
  * Endpoint: DELETE /api/logs
- * Tujuan: Menghapus seluruh histori log mutasi skor.
+ * Tujuan: Menghapus seluruh histori log mutasi skor (Reset Engine).
  */
 app.delete('/api/logs', async (req, res) => {
   try {
+    // Menghapus semua baris data di tabel score_logs dari database
     await runCommand('DELETE FROM score_logs');
-    // Memancarkan daftar log kosong ke semua client agar layar realtime update
+    
+    // Mengambil data tim terbaru (skor babak terhitung kosong karena logs sudah bersih)
+    const allTeams = await getTeamsWithRoundScores();
+    
+    // Mengirim broadcast data tim terbaru ke semua client yang terhubung secara realtime
+    io.emit('teams-updated', allTeams);
+    
+    // Memancarkan daftar log kosong ke semua client agar tabel log ter-reset seketika
     io.emit('logs-updated', []);
+    
+    // Memberikan respons JSON sukses kepada pemanggil API
     res.json({ success: true });
   } catch (error) {
+    // Menangani error database dan mengembalikan status code 500
     res.status(500).json({ error: error.message });
   }
 });
@@ -469,14 +497,22 @@ io.on('connection', (socket) => {
         if (gameState.timerType === 'countdown') {
           // Jika nilai timer masih di atas 0, kurangi 1 detik
           if (gameState.timerValue > 0) {
+            // Mengurangi nilai detik timer sebanyak 1
             gameState.timerValue -= 1;
+            // Memancarkan perubahan nilai detik ke semua client terhubung secara realtime
             io.emit('timer-tick', gameState.timerValue);
-          } else {
-            // Jika timer mencapai 0, hentikan timer secara otomatis
-            clearInterval(timerInterval);
-            gameState.timerStatus = 'stopped';
-            io.emit('game-state', gameState);
-            io.emit('timer-finished');
+            
+            // Jika setelah dikurangi nilainya tepat mencapai 0, hentikan timer & bunyikan bel seketika
+            if (gameState.timerValue === 0) {
+              // Hentikan interval eksekusi hitung mundur
+              clearInterval(timerInterval);
+              // Setel status permainan menjadi stopped
+              gameState.timerStatus = 'stopped';
+              // Kirim state game terbaru (dengan status stopped) ke seluruh client
+              io.emit('game-state', gameState);
+              // Pancarkan sinyal bahwa timer telah habis untuk memicu efek suara alarm di display
+              io.emit('timer-finished');
+            }
           }
         } 
         // Logika stopwatch bertambah nilainya per detik

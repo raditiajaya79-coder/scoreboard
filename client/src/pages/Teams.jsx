@@ -30,6 +30,8 @@ export default function Teams() {
   const [editName, setEditName] = useState('');
   // State input warna tim edit
   const [editColor, setEditColor] = useState('#6366f1');
+  // State input skor tim edit (ditambahkan untuk mengatasi error undefined)
+  const [editScore, setEditScore] = useState(0);
   /**
    * Fungsi: fetchTeams
    * Tujuan: Mengambil daftar tim dari API backend.
@@ -165,7 +167,7 @@ export default function Teams() {
       });
 
       if (res.ok) {
-        fetchData(); // Segarkan data tim
+        fetchTeams(); // Memanggil fungsi pembaruan daftar tim yang benar (fetchTeams)
       }
     } catch (err) {
       console.error('Gagal menghapus data tim:', err);

@@ -55,19 +55,32 @@ export default function Operator() {
   // EFFECTS & SOCKET SYNC
   // ==========================================
   useEffect(() => {
-    // 1. Mengambil data awal via REST API
+    // 1. Mengambil data awal via REST API secara paralel
     const fetchInitialData = async () => {
       try {
-        const teamsRes = await fetch('http://localhost:5000/api/teams');
-        setTeams(await teamsRes.json());
-
-        const roundsRes = await fetch('http://localhost:5000/api/rounds');
-        const roundsData = await roundsRes.json();
-        setRounds(roundsData);
-
-        const logsRes = await fetch('http://localhost:5000/api/logs');
-        setLogs(await logsRes.json());
+        // Melakukan request secara paralel untuk mengambil data tim, babak, log, dan state game saat ini
+        const [tmRes, rdRes, lgRes, gsRes] = await Promise.all([
+          // Mengambil daftar tim
+          fetch('http://localhost:5000/api/teams'),
+          // Mengambil konfigurasi babak
+          fetch('http://localhost:5000/api/rounds'),
+          // Mengambil log histori perubahan nilai
+          fetch('http://localhost:5000/api/logs'),
+          // Mengambil state game aktif dari memori server
+          fetch('http://localhost:5000/api/game-state')
+        ]);
+        // Menetapkan state tim lokal
+        setTeams(await tmRes.json());
+        // Menetapkan state babak lokal
+        setRounds(await rdRes.json());
+        // Menetapkan state log aktivitas lokal
+        setLogs(await lgRes.json());
+        // Membaca game state awal hasil response JSON
+        const initialGameState = await gsRes.json();
+        // Menetapkannya ke state game lokal agar konsisten setelah reload
+        setGameState(initialGameState);
       } catch (err) {
+        // Mencatat pesan kegagalan ke dalam log konsol
         console.error('Gagal mengambil data operator:', err);
       }
     };
@@ -221,6 +234,20 @@ export default function Operator() {
       
       // Hapus semua histori log agar perhitungan skor per babak juga kembali ke 0
       await fetch('http://localhost:5000/api/logs', { method: 'DELETE' });
+      
+      // Mengambil data tim terbaru pasca reset untuk memperbarui UI lokal operator
+      const updatedTeamsRes = await fetch('http://localhost:5000/api/teams');
+      // Melakukan parsing data JSON tim terupdate
+      const updatedTeamsData = await updatedTeamsRes.json();
+      // Memperbarui state teams lokal agar angka skor berubah menjadi 0 seketika
+      setTeams(updatedTeamsData);
+      
+      // Mengambil data log terbaru yang sudah kosong dari server
+      const updatedLogsRes = await fetch('http://localhost:5000/api/logs');
+      // Melakukan parsing data JSON log kosong
+      const updatedLogsData = await updatedLogsRes.json();
+      // Memperbarui state logs lokal agar tabel riwayat terhapus seketika
+      setLogs(updatedLogsData);
       
       // Reset juga state game terkait pengumuman
       socket.emit('update-game-state', { hasShownKlasemenSementara: false, showRankingFullScreen: false });
@@ -376,7 +403,8 @@ export default function Operator() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem', width: '100%' }}>
         {/* ROW 1: KONTROL GLOBAL */}
-        <div className="grid-auto" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(40rem, 1fr))', marginBottom: 0 }}>
+        {/* Baris grid otomatis dengan kolom minimum 28rem agar pas di layar laptop kecil maupun mobile tanpa overflow */}
+        <div className="grid-auto" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(28rem, 1fr))', marginBottom: 0 }}>
           {/* 1. Kontrol Layar Proyektor (Display Engine) */}
           <div className="glass-card" style={{ marginBottom: 0, height: '100%', padding: '1.5rem 2rem', display: 'flex', flexDirection: 'column' }}>
             <h2 style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: 0, marginBottom: '1.2rem' }}>
@@ -682,7 +710,8 @@ export default function Operator() {
         </div>
 
         {/* ROW 2: ENGINE & SKORING */}
-        <div className="grid-auto" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(40rem, 1fr))', alignItems: 'stretch', marginBottom: 0 }}>
+        {/* Baris grid otomatis dengan kolom minimum 28rem agar pas di layar laptop kecil maupun mobile tanpa overflow */}
+        <div className="grid-auto" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(28rem, 1fr))', alignItems: 'stretch', marginBottom: 0 }}>
           
           {/* Kolom Kiri: Modul Engine Khusus Babak */}
           <EngineControls 

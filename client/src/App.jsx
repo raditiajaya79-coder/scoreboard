@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
-import Login from './pages/Login.jsx';
+// Login.jsx tidak lagi di-import karena halaman login telah di-bypass (auto-redirect ke /operator)
 import Teams from './pages/Teams.jsx';
 import Rounds from './pages/Rounds.jsx';
 import Operator from './pages/Operator.jsx';
@@ -43,54 +43,45 @@ function Navigation({ user }) {
           SCM PRO v1.0
         </span>
 
-        {/* Tautan Navigasi Menu Utama */}
-        <div className="nav-links" style={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
+        {/* Tautan Navigasi Menu Utama dengan class CSS responsif */}
+        <div className="nav-links" style={{ flexGrow: 1, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
           
+          {/* Tautan untuk mengelola tim */}
           <Link to="/teams" className={`nav-link ${location.pathname === '/teams' ? 'active' : ''}`}>
             Kelola Tim
           </Link>
           
+          {/* Tautan untuk mengelola babak lomba */}
           <Link to="/rounds" className={`nav-link ${location.pathname === '/rounds' ? 'active' : ''}`}>
             Kelola Babak
           </Link>
 
-          {/* Garis Pemisah (Divider) */}
-          <div style={{ width: '0.1rem', height: '2rem', background: 'rgba(255,255,255,0.1)', margin: '0 1.5rem' }}></div>
+          {/* Garis Pemisah (Divider) dengan kelas CSS responsif */}
+          <div className="nav-divider"></div>
 
-          {/* Tautan Navigasi Khusus (Aksi Cepat) */}
-          <Link to="/operator" className="btn" style={{
-            background: location.pathname === '/operator' ? 'linear-gradient(135deg, #4f46e5, #3730a3)' : 'rgba(99, 102, 241, 0.15)',
-            border: '0.1rem solid rgba(99, 102, 241, 0.3)',
-            color: '#c7d2fe',
-            padding: '0.6rem 1.2rem',
-            fontSize: '1.2rem',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.5rem'
+          {/* Tombol Aksi Cepat: Layar Operator — menggunakan class CSS responsif */}
+          <Link to="/operator" className="nav-action-btn nav-action-btn--operator" style={{
+            background: location.pathname === '/operator' 
+              ? 'linear-gradient(135deg, #4f46e5, #3730a3)' /* Gradasi ungu solid saat halaman aktif */
+              : 'rgba(99, 102, 241, 0.15)' /* Transparan ungu redup saat tidak aktif */
           }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            {/* Ikon pena edit berukuran proporsional */}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 20h9" />
               <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
             </svg>
-            Layar Operator
+            <span>Layar Operator</span>
           </Link>
 
-          <Link to="/display" target="_blank" rel="noopener noreferrer" className="btn" style={{
-            background: 'rgba(244, 63, 94, 0.15)',
-            border: '0.1rem solid rgba(244, 63, 94, 0.3)',
-            color: '#fda4af',
-            padding: '0.6rem 1.2rem',
-            fontSize: '1.2rem',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}>
-            <span>Layar Display ↗</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          {/* Tombol Aksi Cepat: Layar Display — menggunakan class CSS responsif */}
+          <Link to="/display" target="_blank" rel="noopener noreferrer" className="nav-action-btn nav-action-btn--display">
+            {/* Ikon monitor berukuran proporsional */}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
               <line x1="8" y1="21" x2="16" y2="21"/>
               <line x1="12" y1="17" x2="12" y2="21"/>
             </svg>
+            <span>Layar Display ↗</span>
           </Link>
         </div>
       </div>

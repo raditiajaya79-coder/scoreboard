@@ -238,6 +238,68 @@ a {
   box-shadow: 0 0.6rem 2.4rem rgba(16, 185, 129, 0.45);
 }
 
+/* Indikator Tombol Timer Berjalan (Pulsing Glow & Animasi) */
+.btn-timer-running {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  box-shadow: 0 0 2rem rgba(16, 185, 129, 0.6) !important;
+  animation: pulse-glow 1.5s infinite alternate ease-in-out !important;
+  cursor: default;
+  opacity: 1 !important; /* Menjaga kontras visual meskipun tombol disetel disabled */
+}
+
+/* Titik berkedip/berdenyut di dalam tombol */
+.spinner-dot {
+  width: 1rem;
+  height: 1rem;
+  background-color: #ffffff;
+  border-radius: 50%;
+  display: inline-block;
+  animation: spinner-pulse 1s infinite ease-in-out;
+}
+
+/* Keyframes untuk denyut cahaya tombol */
+@keyframes pulse-glow {
+  0% {
+    box-shadow: 0 0 1rem rgba(16, 185, 129, 0.4);
+    transform: translateY(-0.1rem) scale(1);
+  }
+  100% {
+    box-shadow: 0 0 2.5rem rgba(16, 185, 129, 0.8);
+    transform: translateY(-0.1rem) scale(1.02);
+  }
+}
+
+/* Keyframes untuk kedipan titik indikator */
+@keyframes spinner-pulse {
+  0%, 100% {
+    transform: scale(0.6);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+/* Indikator Angka Detik Timer Berjalan (Pulsing Glow & Scale) */
+.timer-running-pulse {
+  display: inline-block;
+  animation: timer-pulse 1s infinite alternate ease-in-out !important;
+  text-shadow: 0 0 1.5rem currentColor;
+}
+
+/* Keyframes untuk denyut angka detik */
+@keyframes timer-pulse {
+  0% {
+    transform: scale(1);
+    filter: brightness(0.9);
+  }
+  100% {
+    transform: scale(1.08);
+    filter: brightness(1.2);
+  }
+}
+
 .btn-danger {
   background: var(--gradient-danger);
   box-shadow: 0 0.4rem 1.6rem rgba(244, 63, 94, 0.3);
@@ -308,84 +370,7 @@ a {
    DISPLAY SCREEN SPECIFIC (Papan Skor Proyektor)
    ========================================== */
 
-.display-layout {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: 100vh;
-  padding: 5rem 6rem;
-  width: 100%;
-  overflow: hidden;
-}
-
-.display-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 0.1rem solid rgba(255, 255, 255, 0.08);
-  padding-bottom: 2.5rem;
-  margin-bottom: 3.5rem;
-}
-
-.display-teams-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(32rem, 1fr));
-  gap: 3.5rem;
-  flex-grow: 1;
-  align-items: center;
-}
-
-.display-team-card {
-  align-items: center;
-  border-radius: 2.4rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 5rem 3rem;
-  text-align: center;
-  position: relative;
-  overflow: hidden;
-  transition: all 0.6s cubic-bezier(0.19, 1, 0.22, 1);
-}
-
-.display-team-score {
-  font-family: var(--font-outfit);
-  font-size: clamp(6.5rem, 12vw, 11rem);
-  font-weight: 800;
-  line-height: 1;
-  margin: 2rem 0;
-  text-shadow: 0 0.8rem 2.4rem rgba(0, 0, 0, 0.5);
-  transition: opacity 0.5s ease;
-  letter-spacing: -0.03em;
-}
-
-.display-team-name {
-  font-family: var(--font-outfit);
-  font-size: clamp(2.4rem, 4vw, 3.8rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.display-timer-box {
-  background: rgba(15, 23, 42, 0.5);
-  border: 0.1rem solid rgba(255, 255, 255, 0.1);
-  border-radius: 2rem;
-  padding: 1.5rem 3.5rem;
-  text-align: center;
-  font-family: var(--font-outfit);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.display-timer-value {
-  font-size: clamp(7.5rem, 13vw, 13rem);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  line-height: 0.85;
-  letter-spacing: -0.05em;
-}
+/* (Sesi display-layout, display-header, dan display-teams-grid lama dihapus karena telah diganti dengan class baru yang responsif) */
 
 /* ==========================================
    NAVBAR & HEADER
@@ -506,18 +491,7 @@ a {
   .btn {
     width: 100%;
   }
-  .display-layout {
-    padding: 2rem 1.5rem;
-  }
-  .display-header {
-    flex-direction: column;
-    text-align: center;
-    gap: 2rem;
-  }
-  .display-timer-box {
-    width: 100%;
-    margin-top: 1.5rem;
-  }
+  /* CSS layout dan timer box lama untuk display dihapus */
   .navbar {
     padding: 1.2rem;
     flex-direction: column;
@@ -555,9 +529,7 @@ a {
   .operator-layout {
     flex-direction: column;
   }
-  .display-teams-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  /* CSS display-teams-grid lama dihapus */
   .navbar {
     padding: 1.5rem;
     justify-content: center;
@@ -574,9 +546,7 @@ a {
 
 /* 3. Laptop (769px - 1024px) */
 @media (min-width: 769px) and (max-width: 1024px) {
-  .display-teams-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  /* CSS display-teams-grid lama di laptop dihapus */
 }
 
 /* 4. Desktop (1025px - 1440px) */
@@ -673,5 +643,325 @@ a {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* ==========================================
+   RESPONSIVE DESIGN LAYOUT ENHANCEMENTS
+   ========================================== */
+
+/* Garis Pemisah Navigasi (Nav Divider) */
+.nav-divider {
+  width: 0.1rem;
+  height: 2rem;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 1.5rem;
+}
+
+/* Menyembunyikan divider pada layar tablet dan mobile */
+@media (max-width: 768px) {
+  .nav-divider {
+    display: none;
+  }
+}
+
+/* ==========================================
+   TOMBOL NAVIGASI AKSI CEPAT (NAV ACTION BUTTONS)
+   ========================================== */
+
+/* Gaya dasar tombol navigasi aksi cepat — ukuran lebih besar agar mudah diklik dan terlihat profesional */
+.nav-action-btn {
+  display: inline-flex;          /* Menyejajarkan ikon dan teks secara horizontal */
+  align-items: center;           /* Menyelaraskan elemen anak secara vertikal di tengah */
+  gap: 0.8rem;                   /* Jarak antara ikon SVG dan teks label */
+  padding: 1rem 2rem;            /* Area klik yang luas dan nyaman */
+  font-size: 1.4rem;             /* Ukuran font yang mudah dibaca */
+  font-weight: 600;              /* Ketebalan semi-bold untuk kejelasan */
+  border-radius: 1.2rem;         /* Sudut melengkung modern */
+  text-decoration: none;         /* Menghilangkan garis bawah tautan */
+  cursor: pointer;               /* Mengubah kursor menjadi tangan saat diarahkan */
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); /* Transisi halus untuk hover */
+  white-space: nowrap;           /* Mencegah teks terpotong ke baris baru */
+  letter-spacing: 0.02em;        /* Spasi karakter tipis untuk keterbacaan */
+  line-height: 1.4;              /* Tinggi baris agar teks tidak terlalu rapat */
+}
+
+/* Varian warna: Layar Operator (ungu indigo) */
+.nav-action-btn--operator {
+  background: rgba(99, 102, 241, 0.15); /* Latar belakang ungu transparan default */
+  border: 0.15rem solid rgba(99, 102, 241, 0.35); /* Border ungu semi-transparan */
+  color: #c7d2fe;                /* Warna teks ungu muda */
+}
+
+/* Efek hover Layar Operator — latar gelap lebih solid, border lebih terang */
+.nav-action-btn--operator:hover {
+  background: rgba(99, 102, 241, 0.3); /* Menggelapkan latar belakang ungu */
+  border-color: rgba(99, 102, 241, 0.6); /* Menaikkan kontras border */
+  transform: translateY(-0.15rem);      /* Sedikit mengangkat tombol */
+  box-shadow: 0 0.4rem 1.5rem rgba(99, 102, 241, 0.25); /* Bayangan pendaran ungu */
+}
+
+/* Varian warna: Layar Display (merah mawar / rose) */
+.nav-action-btn--display {
+  background: rgba(244, 63, 94, 0.15); /* Latar belakang merah transparan default */
+  border: 0.15rem solid rgba(244, 63, 94, 0.35); /* Border merah semi-transparan */
+  color: #fda4af;                /* Warna teks merah muda */
+}
+
+/* Efek hover Layar Display — latar gelap lebih solid, border lebih terang */
+.nav-action-btn--display:hover {
+  background: rgba(244, 63, 94, 0.3); /* Menggelapkan latar belakang merah */
+  border-color: rgba(244, 63, 94, 0.6); /* Menaikkan kontras border */
+  transform: translateY(-0.15rem);      /* Sedikit mengangkat tombol */
+  box-shadow: 0 0.4rem 1.5rem rgba(244, 63, 94, 0.25); /* Bayangan pendaran merah */
+}
+
+/* Responsivitas tombol navigasi di layar tablet */
+@media (max-width: 768px) {
+  .nav-action-btn {
+    padding: 0.9rem 1.6rem;   /* Sedikit mengecilkan padding di tablet */
+    font-size: 1.3rem;        /* Ukuran font sedikit lebih kecil */
+    border-radius: 1rem;      /* Kelengkungan sudut proporsional */
+  }
+}
+
+/* Responsivitas tombol navigasi di layar mobile kecil */
+@media (max-width: 480px) {
+  .nav-action-btn {
+    padding: 0.8rem 1.4rem;   /* Padding yang tetap nyaman di jari */
+    font-size: 1.2rem;        /* Font minimum yang masih terbaca */
+    gap: 0.6rem;              /* Jarak ikon-teks lebih rapat */
+    border-radius: 0.8rem;    /* Kelengkungan lebih kecil */
+    flex: 1 1 auto;           /* Mengizinkan tombol mengisi ruang tersedia */
+  }
+}
+
+/* Logo Branding Kediri Technopark */
+.display-branding-logo {
+  position: absolute;
+  top: 2.5rem;
+  right: 3.5rem;
+  z-index: 10000;
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+.display-branding-logo img {
+  height: 4.5rem;
+  object-fit: contain;
+  filter: drop-shadow(0 0.2rem 0.5rem rgba(0,0,0,0.5));
+}
+
+@media (max-width: 480px) {
+  .display-branding-logo {
+    position: relative;
+    top: 0;
+    right: 0;
+    margin: 1.5rem auto 0;
+    display: flex;
+    justify-content: center;
+  }
+  .display-branding-logo img {
+    height: 3rem;
+  }
+}
+
+/* Banner Judul Display */
+.display-banner {
+  background: rgba(255,255,255,0.03);
+  border: 0.1rem solid rgba(255,255,255,0.05);
+  border-radius: 10rem;
+  padding: 1rem 3rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 2rem;
+  box-shadow: 0 0.5rem 2rem rgba(0,0,0,0.2);
+  transition: all 0.3s ease;
+}
+
+.display-banner-divider {
+  width: 0.3rem;
+  height: 3rem;
+  background: rgba(255,255,255,0.3);
+}
+
+@media (max-width: 480px) {
+  .display-banner {
+    border-radius: 2rem;
+    padding: 1.2rem 2rem;
+    flex-direction: column;
+    gap: 0.8rem;
+    width: 100%;
+    text-align: center;
+  }
+  .display-banner-divider {
+    display: none;
+  }
+}
+
+/* Grid Skor Display — 3 kolom tetap agar 6 tim selalu rata 3-3 */
+.display-score-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr); /* Selalu 3 kolom di desktop agar simetris */
+  gap: 4rem;
+  flex-grow: 1;
+  align-content: center;
+  max-width: 100%;
+  margin: 0 auto;
+  width: 100%;
+  padding-bottom: 8rem;
+  transition: all 0.3s ease;
+}
+
+/* Tablet: 2 kolom agar kartu tidak terlalu kecil */
+@media (max-width: 1024px) {
+  .display-score-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2.5rem;
+    padding-bottom: 4rem;
+  }
+}
+
+/* Mobile: 1 kolom vertikal penuh */
+@media (max-width: 480px) {
+  .display-score-grid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    padding-bottom: 2rem;
+  }
+}
+
+/* Kartu Skor Display */
+.display-score-card {
+  background: linear-gradient(145deg, rgba(34, 43, 69, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border-radius: 2.5rem;
+  padding: 5rem 6rem;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 34rem;
+  border: 0.15rem solid rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  .display-score-card {
+    padding: 3rem 2.5rem;
+    border-radius: 1.8rem;
+    min-height: 28rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .display-score-card {
+    padding: 2.5rem 1.5rem;
+    border-radius: 1.5rem;
+    min-height: 22rem;
+  }
+}
+
+/* Mini Scoreboard Cards di Bawah Timer */
+.display-mini-cards {
+  position: absolute;
+  bottom: 4rem;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  padding: 0 4rem;
+  width: 100%;
+  flex-wrap: wrap;
+  transition: all 0.3s ease;
+}
+
+.display-mini-card {
+  flex: 1 1 18rem;
+  max-width: 22rem;
+  border-radius: 1.5rem;
+  padding: 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@media (max-width: 768px) {
+  .display-mini-cards {
+    bottom: 2rem;
+    gap: 1.2rem;
+    padding: 0 2rem;
+  }
+  .display-mini-card {
+    flex: 1 1 14rem;
+    padding: 1.2rem 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .display-mini-cards {
+    position: relative;
+    bottom: 0;
+    margin-top: 3rem;
+    padding: 0 1rem;
+    gap: 1rem;
+  }
+  .display-mini-card {
+    flex: 1 1 10rem;
+    max-width: 14rem;
+    padding: 1rem 0.6rem;
+  }
+}
+
+/* Kontainer Barisan Podium */
+.display-podium-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 1.8rem;
+  width: 100%;
+  max-width: 160rem;
+  height: 75vh;
+  z-index: 2;
+  transition: all 0.3s ease;
+}
+
+/* Item Podium Individual */
+.display-podium-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+/* Responsivitas Podium di Layar Tablet & Mobile */
+@media (max-width: 768px) {
+  .display-podium-container {
+    justify-content: flex-start;
+    align-items: flex-end;
+    overflow-x: auto;
+    padding: 2rem 4rem;
+    gap: 2.5rem;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .display-podium-item {
+    flex: 0 0 25rem !important;
+    height: 90% !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .display-podium-container {
+    padding: 1.5rem 2rem;
+    gap: 1.8rem;
+  }
+  .display-podium-item {
+    flex: 0 0 22rem !important;
+    height: 85% !important;
   }
 }

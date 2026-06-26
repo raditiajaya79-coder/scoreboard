@@ -11,6 +11,8 @@ export default function EngineControls({
   nextTebakKataPlayer, 
   handleTebakKataSuccess 
 }) {
+  // Hitung ambang batas waktu kritis (danger threshold) secara dinamis sesuai timerMax saat ini
+  const dangerThreshold = (gameState.timerMax >= 60 ? 10 : gameState.timerMax >= 30 ? 8 : gameState.timerMax >= 15 ? 5 : 3);
   return (
     <>
       {/* Kolom Kiri: Modul Engine Khusus Babak */}
@@ -33,7 +35,13 @@ export default function EngineControls({
                   <span style={{ fontSize: '1.3rem', textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>
                     Sisa Waktu
                   </span>
-                  <strong style={{ fontSize: '7.2rem', fontFamily: 'var(--font-outfit)', fontWeight: 800, color: gameState.timerValue <= 5 ? '#f43f5e' : '#34d399', letterSpacing: '-0.02em' }}>
+                  {/* Elemen strong penampil angka sisa waktu detik dengan efek pulsing dinamis saat running */}
+                  <strong 
+                    // Menambahkan class .timer-running-pulse saat timer aktif ('running') agar angka berdenyut hidup
+                    className={gameState.timerStatus === 'running' ? 'timer-running-pulse' : ''}
+                    // Gaya inline bawaan untuk ukuran font, ketebalan, dan warna yang menyesuaikan dengan kondisi sisa waktu (merah jika di bawah atau sama dengan dangerThreshold)
+                    style={{ fontSize: '7.2rem', fontFamily: 'var(--font-outfit)', fontWeight: 800, color: gameState.timerValue <= dangerThreshold ? '#f43f5e' : '#34d399', letterSpacing: '-0.02em', transition: 'color 0.2s' }}
+                  >
                     {gameState.timerValue} <span style={{ fontSize: '2.4rem', fontWeight: 500 }}>Detik</span>
                   </strong>
                   <div style={{ fontSize: '1.2rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
@@ -43,12 +51,36 @@ export default function EngineControls({
 
                 {/* Tombol Timer */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', flex: '0 0 24rem' }}>
-                  <button className="btn btn-success" onClick={startTimer} disabled={gameState.timerStatus === 'running'} style={{ width: '100%' }}>
-                    {/* Play SVG */}
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="5 3 19 12 5 21 5 3" />
-                    </svg>
-                    <span>Mulai Waktu</span>
+                  {/* Tombol Mulai Waktu dengan style dinamis berdasarkan state timer (aktif atau tidak) */}
+                  <button 
+                    // Jika timer sedang aktif ('running'), gunakan class animasi .btn-timer-running agar terlihat berdenyut terang. Jika tidak, gunakan .btn-success biasa.
+                    className={`btn ${gameState.timerStatus === 'running' ? 'btn-timer-running' : 'btn-success'}`} 
+                    // Jalankan fungsi startTimer ketika diklik
+                    onClick={startTimer} 
+                    // Tombol disetel disabled saat timer berjalan untuk menghindari penumpukan request, tetapi class CSS akan menjaga opacity-nya tetap kontras
+                    disabled={gameState.timerStatus === 'running'} 
+                    // Atur lebar tombol penuh 100% dari kontainer sidebar
+                    style={{ width: '100%' }}
+                  >
+                    {gameState.timerStatus === 'running' ? (
+                      // Tampilan indikator berdenyut jika waktu sedang berjalan
+                      <>
+                        {/* Bulatan kecil animasi berkedip sebagai penanda aktivitas */}
+                        <span className="spinner-dot" />
+                        {/* Teks penjelas status waktu beserta sisa detik berjalan */}
+                        <span>Berjalan ({gameState.timerValue}s)...</span>
+                      </>
+                    ) : (
+                      // Tampilan tombol play bawaan jika waktu sedang berhenti/jeda
+                      <>
+                        {/* Icon Play SVG standar */}
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                        {/* Teks tombol default */}
+                        <span>Mulai Waktu</span>
+                      </>
+                    )}
                   </button>
                   <button className="btn btn-secondary" onClick={pauseTimer} disabled={gameState.timerStatus !== 'running'} style={{ width: '100%' }}>
                     {/* Pause SVG */}
@@ -109,7 +141,15 @@ export default function EngineControls({
                 {/* Durasi per orang */}
                 <div style={{ flex: '1 1 15rem' }}>
                   <label style={{ display: 'block', marginBottom: '0.8rem', fontSize: '1.2rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Waktu / Orang: <strong style={{ color: gameState.timerValue <= 5 ? '#f43f5e' : '#34d399', marginLeft: '0.5rem' }}>{gameState.timerValue}s</strong>
+                    {/* Label teks penjelas dengan strong tag yang berdenyut dinamis saat running */}
+                    Waktu / Orang: <strong 
+                      // Menggunakan class .timer-running-pulse saat timer sedang aktif berjalan
+                      className={gameState.timerStatus === 'running' ? 'timer-running-pulse' : ''}
+                      // Warna teks otomatis berubah menjadi merah ketika sisa waktu kritis (<= dangerThreshold)
+                      style={{ color: gameState.timerValue <= dangerThreshold ? '#f43f5e' : '#34d399', marginLeft: '0.5rem', transition: 'color 0.2s' }}
+                    >
+                      {gameState.timerValue}s
+                    </strong>
                   </label>
                   <input 
                     type="number" 
@@ -148,18 +188,39 @@ export default function EngineControls({
                     </svg>
                     <span>Reset</span>
                   </button>
+                  {/* Tombol Mulai/Mulai Ulang Timer Tebak Kata dengan style responsif dinamis */}
                   <button 
-                    className="btn btn-success"
-                    style={{ flex: '1 1 10rem', height: '4.5rem', fontSize: '1.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                    // Memilih class visual .btn-timer-running jika sedang berjalan untuk indikator pulsing glow, jika tidak gunakan .btn-success
+                    className={`btn ${gameState.timerStatus === 'running' ? 'btn-timer-running' : 'btn-success'}`}
+                    // Merestart timer ke batas durasi Tebak Kata saat ini lalu memicu command start melalui Socket.IO
                     onClick={() => {
+                      // Mengirim sinyal reset waktu ke server dengan parameter durasi tebak kata
                       socket.emit('timer-reset', gameState.tebakKataDuration || activeRound?.duration || 30);
+                      // Mengirim sinyal start waktu ke server
                       socket.emit('timer-start');
                     }}
+                    // Atur fleksibilitas layout tombol agar presisi di layar laptop/tablet/mobile
+                    style={{ flex: '1 1 10rem', height: '4.5rem', fontSize: '1.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="5 3 19 12 5 21 5 3" />
-                    </svg>
-                    <span>Mulai</span>
+                    {gameState.timerStatus === 'running' ? (
+                      // Tampilan penanda aktif ketika tebak kata sedang berlangsung
+                      <>
+                        {/* Indikator bulatan berdenyut */}
+                        <span className="spinner-dot" />
+                        {/* Label dinamis running beserta sisa detik berjalan */}
+                        <span>Berjalan ({gameState.timerValue}s)...</span>
+                      </>
+                    ) : (
+                      // Tampilan default tombol Mulai
+                      <>
+                        {/* Icon Play SVG */}
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                        {/* Label default */}
+                        <span>Mulai</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
